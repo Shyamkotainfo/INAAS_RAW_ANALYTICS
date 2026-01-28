@@ -1,4 +1,4 @@
-# Backend/retrieval/context_builder.py
+# Backend/rag/context_builder.py
 
 import re
 

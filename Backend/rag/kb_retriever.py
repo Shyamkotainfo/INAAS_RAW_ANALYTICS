@@ -1,4 +1,4 @@
-# Backend/retrieval/kb_retriever.py
+# Backend/rag/kb_retriever.py
 
 import boto3
 from config.settings import settings

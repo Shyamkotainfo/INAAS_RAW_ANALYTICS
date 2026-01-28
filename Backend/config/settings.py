@@ -95,7 +95,7 @@ class Settings(BaseSettings):
             if self.aws_session_token:
                 os.environ["AWS_SESSION_TOKEN"] = self.aws_session_token
 
-        os.environ["AWS_DEFAULT_REGION"] = self.aws_region
+        os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
     class Config:
         env_file = ".env"
