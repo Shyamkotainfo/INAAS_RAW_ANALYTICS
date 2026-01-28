@@ -43,7 +43,10 @@ class SchemaExtractor:
                 .limit(2)
                 .collect()
             )
+
+            # 🔑 CRITICAL FIX: include file_path in every column chunk
             columns.append({
+                "file_path": s3_path,
                 "name": field.name,
                 "type": str(field.dataType),
                 "sample_values": [str(row[0]) for row in samples]
@@ -51,6 +54,7 @@ class SchemaExtractor:
 
         metadata = {
             "file_id": s3_path,
+            "file_path": s3_path,   # 🔁 intentional duplication (safe for RAG)
             "format": file_format,
             "columns": columns,
             "row_count": df.count(),
