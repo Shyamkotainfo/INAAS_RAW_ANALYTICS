@@ -27,6 +27,6 @@ class QueryOrchestrator:
         return {
             "pyspark_code": pyspark_code,
             "result": rows,
-            "summary": self.summarizer.summarize(question, rows)
+            # "summary": self.summarizer.summarize(question, rows)
         }
 

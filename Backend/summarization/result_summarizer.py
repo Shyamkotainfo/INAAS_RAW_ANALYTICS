@@ -18,4 +18,4 @@ Result rows (sample):
 Explain the result clearly and concisely.
 """
 
-        return self.llm.generate(prompt, question)
+        return self.llm.generate(prompt)

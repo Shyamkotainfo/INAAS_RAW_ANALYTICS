@@ -31,7 +31,19 @@ Available columns:
 
 User question:
 {question}
+
+IMPORTANT:
+- Do NOT use Markdown
+- Do NOT include ``` or ```python
+- Do NOT import any modules
+- Use F.<function>() only
+- NEVER use `.count()`
+- For counting rows, ALWAYS use:
+  result_df = df.select(F.count("*").alias("<name>"))
+- For grouped counts, ALWAYS use:
+  result_df = df.groupBy("<col>").agg(F.count("*").alias("<name>"))
+
 """
 
-        return self.llm.generate(prompt, question)
+        return self.llm.generate(prompt)
 

@@ -15,8 +15,8 @@ def main():
     for row in response["result"]:
         print(row)
 
-    print("\n--- Summary ---")
-    print(response["summary"])
+    # print("\n--- Summary ---")
+    # print(response["summary"])
 
 
 if __name__ == "__main__":
