@@ -1,4 +1,6 @@
 
+from prompt.base_rules import base_rules
+
 def get_pyspark_prompt(column_list, question):
 
     prompt = f"""
@@ -31,6 +33,8 @@ def get_pyspark_prompt(column_list, question):
     - For grouped counts, ALWAYS use:
       result_df = df.groupBy("<col>").agg(F.count("*").alias("<name>"))
     
+    Rules:
+    {base_rules}
     """
 
     return prompt
