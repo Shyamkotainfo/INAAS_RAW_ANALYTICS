@@ -2,7 +2,7 @@ from rag.kb_retriever import KnowledgeBaseRetriever
 from rag.context_builder import build_query_context
 from query_generation.pyspark_generator import PySparkCodeGenerator
 from execution.local_pyspark_executor import LocalPySparkExecutor
-# from summarization.result_summarizer import ResultSummarizer
+from summarization.result_summarizer import ResultSummarizer
 from profiling.dataframe_profiler import DataFrameProfiler
 
 
@@ -11,7 +11,7 @@ class QueryOrchestrator:
         self.retriever = KnowledgeBaseRetriever()
         self.codegen = PySparkCodeGenerator()
         self.executor = LocalPySparkExecutor()
-        # self.summarizer = ResultSummarizer()
+        self.summarizer = ResultSummarizer()
 
     def run(self, question: str):
 
@@ -40,13 +40,13 @@ class QueryOrchestrator:
             profile = DataFrameProfiler(df).run()
 
             # Let LLM explain the profile
-            # summary = self.summarizer.summarize_profile(profile)
+            summary = self.summarizer.summarize_profile(profile)
 
             return {
                 "mode": "profile",
                 "file_id": file_id,
                 "profile": profile,
-                # "summary": summary
+                "summary": summary
             }
 
         # -------------------------------------------
@@ -59,5 +59,5 @@ class QueryOrchestrator:
             "mode": "query",
             "pyspark_code": pyspark_code,
             "result": rows,
-            # "summary": self.summarizer.summarize(question, rows[:10])
+            "summary": self.summarizer.summarize(question, rows[:10])
         }

@@ -26,3 +26,26 @@ Do NOT mention technical details like Spark, DataFrames, or code.
             temperature=0.2,
             max_tokens=300
         )
+
+    def summarize_profile(self, profile: dict) -> str:
+        prompt = f"""
+    You are a data analyst.
+
+    Below is an auto-generated data profile from a raw dataset.
+
+    Profile:
+    {profile}
+
+    Explain:
+    - Data completeness issues
+    - High cardinality columns
+    - Any potential data quality risks
+    - What kind of analysis this dataset is suitable for
+    """
+
+        return invoke_llm(
+            prompt=prompt,
+            temperature=0.2,
+            max_tokens=400
+        )
+

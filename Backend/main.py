@@ -28,8 +28,8 @@ def main():
                 print("\n--- DATA PROFILE ---")
                 print(response["profile"])
 
-                # print("\n--- PROFILE SUMMARY ---")
-                # print(response["summary"])
+                print("\n--- PROFILE SUMMARY ---")
+                print(response["summary"])
                 continue
 
                 # --------------------------------------
@@ -43,8 +43,8 @@ def main():
                 for row in response["result"]:
                     print(row)
 
-            # print("\n--- Summary ---")
-            # print(response["summary"])
+            print("\n--- Summary ---")
+            print(response["summary"])
 
         except KeyboardInterrupt:
             print("\n Goodbye!")
