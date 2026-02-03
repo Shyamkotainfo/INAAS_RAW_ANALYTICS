@@ -4,6 +4,7 @@ from query_generation.pyspark_generator import PySparkCodeGenerator
 from execution.local_pyspark_executor import LocalPySparkExecutor
 from summarization.result_summarizer import ResultSummarizer
 from profiling.dataframe_profiler import DataFrameProfiler
+from quality.quality_engine import run_quality_checks
 
 
 class QueryOrchestrator:
@@ -46,6 +47,26 @@ class QueryOrchestrator:
                 "mode": "profile",
                 "file_id": file_id,
                 "profile": profile,
+                "summary": summary
+            }
+        # -------------------------------------------
+        # STEP 2B: QUALITY MODE (@quality)
+        # -------------------------------------------
+
+        if question.lower().startswith("@quality"):
+            # Load DataFrame ONLY (no LLM code)
+            df = self.executor.load_df(file_id)
+
+            # 🔥 Use EXISTING quality engine
+            quality_report = run_quality_checks(df)
+
+            # LLM explains, does NOT compute
+            summary = self.summarizer.summarize_profile(quality_report)
+
+            return {
+                "mode": "quality",
+                "file_id": file_id,
+                "quality": quality_report,
                 "summary": summary
             }
 
