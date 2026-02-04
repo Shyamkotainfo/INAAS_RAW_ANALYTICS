@@ -24,15 +24,27 @@ def main():
             orchestrator = QueryOrchestrator()
             response = orchestrator.run(user_input)
 
-            print("\n--- Generated PySpark Code ---")
-            print(response["pyspark_code"])
+            if response.get("mode") == "profile":
+                print("\n--- DATA PROFILE ---")
+                print(response["profile"])
 
-            print("\n--- Result Rows ---")
-            for row in response["result"]:
-                print(row)
+                print("\n--- PROFILE SUMMARY ---")
+                print(response["summary"])
+                continue
 
-            # print("\n--- Summary ---")
-            # print(response["summary"])
+                # --------------------------------------
+                # QUERY MODE
+                # --------------------------------------
+            if response.get("mode") == "query":
+                print("\n--- Generated PySpark Code ---")
+                print(response["pyspark_code"])
+
+                print("\n--- Result Rows ---")
+                for row in response["result"]:
+                    print(row)
+
+            print("\n--- Summary ---")
+            print(response["summary"])
 
         except KeyboardInterrupt:
             print("\n Goodbye!")

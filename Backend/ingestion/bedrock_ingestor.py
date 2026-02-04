@@ -9,7 +9,7 @@ logger = get_logger(__name__)
 class BedrockIngestor:
     def __init__(self):
         self.client = boto3.client(
-            "llm-agent",
+            "bedrock-agent",
             region_name=settings.aws_region
         )
 

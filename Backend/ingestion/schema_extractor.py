@@ -1,6 +1,6 @@
 from datetime import datetime, UTC
 from logger.logger import get_logger
-from .spark_session import get_spark
+from spark.spark_session import get_spark
 from .s3_reader import S3Reader
 from .metadata_uploader import MetadataUploader
 from .bedrock_ingestor import BedrockIngestor

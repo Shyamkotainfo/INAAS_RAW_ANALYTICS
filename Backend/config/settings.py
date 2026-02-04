@@ -61,7 +61,20 @@ class Settings(BaseSettings):
         env="BEDROCK_EMBEDDING_MODEL"
     )
 
+    # -------------------- Execution --------------------
+    execution_mode: str = Field(
+        default="local",
+        env="EXECUTION_MODE"
+    )
+
     # -------------------- Validators --------------------
+    @validator("execution_mode")
+    def validate_execution_mode(cls, v):
+        allowed = {"local", "databricks", "emr"}
+        if v not in allowed:
+            raise ValueError(f"EXECUTION_MODE must be one of {allowed}")
+        return v
+
     @validator("allowed_origins", pre=True)
     def parse_allowed_origins(cls, v):
         if isinstance(v, str):

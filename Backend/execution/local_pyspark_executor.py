@@ -1,24 +1,36 @@
+# Backend/execution/local_pyspark_executor.py
+
 from pyspark.sql import functions as F
 from pyspark.sql import DataFrame
-from ingestion.spark_session import get_spark
+
+from spark.spark_session import get_spark
 from execution.dataframe_loader import load_dataframe
+from execution.base_executor import BaseExecutor
 
 
-class LocalPySparkExecutor:
+class LocalPySparkExecutor(BaseExecutor):
+
     def __init__(self):
         self.spark = get_spark()
 
-    def execute(self, file_path: str, pyspark_code: str):
-        # Load dataframe
-        df = load_dataframe(self.spark, file_path)
+    # ------------------------------
+    # Shared loader
+    # ------------------------------
+    def load_df(self, file_path: str) -> DataFrame:
+        return load_dataframe(self.spark, file_path)
 
-        # Execution sandbox
+    # ------------------------------
+    # Query execution (LLM code)
+    # ------------------------------
+    def execute_query(self, file_path: str, pyspark_code: str) -> list[dict]:
+
+        df = self.load_df(file_path)
+
         exec_context = {
             "df": df,
-            "F": F
+            "F": F,
         }
 
-        # Execute generated PySpark code
         try:
             exec(pyspark_code, {}, exec_context)
         except Exception as e:
@@ -26,21 +38,24 @@ class LocalPySparkExecutor:
                 f"Error while executing generated PySpark code:\n\n{pyspark_code}"
             ) from e
 
-        # Contract enforcement
         if "result_df" not in exec_context:
-            raise ValueError(
-                "Generated code must define a variable named `result_df`"
-            )
+            raise ValueError("Generated code must define `result_df`")
 
         result_df = exec_context["result_df"]
 
-        # HARD SAFETY CHECK (very important)
         if not isinstance(result_df, DataFrame):
-            raise TypeError(
-                f"Generated code returned {type(result_df)}. "
-                "Expected pyspark.sql.DataFrame.\n\n"
-                f"Generated code:\n{pyspark_code}"
-            )
+            raise TypeError("result_df must be a DataFrame")
 
-        # Return JSON-serializable output
         return [row.asDict() for row in result_df.limit(100).collect()]
+
+    # ------------------------------
+    # Profile (Spark-only)
+    # ------------------------------
+    def execute_profile(self, file_path: str) -> dict:
+        raise NotImplementedError("Profile handled in orchestrator")
+
+    # ------------------------------
+    # Quality (Spark-only)
+    # ------------------------------
+    def execute_quality(self, file_path: str) -> dict:
+        raise NotImplementedError("Quality handled in orchestrator")
