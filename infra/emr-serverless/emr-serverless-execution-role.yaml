@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: IAM Role for EMR Serverless Spark Jobs (INAAS - Restricted S3)
+
+Resources:
+
+  EMRServerlessJobRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EMRServerlessJobRole-INAAS
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: emr-serverless.amazonaws.com
+            Action: sts:AssumeRole
+
+      Policies:
+        - PolicyName: EMRServerlessSparkAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+
+              # -------------------------------
+              # S3 ACCESS (inaas* buckets only)
+              # -------------------------------
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - arn:aws:s3:::inaas*
+
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - arn:aws:s3:::inaas*/*
+
+              # -------------------------------
+              # CLOUDWATCH LOGS
+              # -------------------------------
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+Outputs:
+  ExecutionRoleArn:
+    Description: IAM Role ARN for EMR Serverless jobs
+    Value: !GetAtt EMRServerlessJobRole.Arn
+
+
+#aws cloudformation create-stack \
+#  --stack-name inaas-emr-serverless-role \
+#  --template-body file://emr-serverless-execution-role.yaml \
+#  --capabilities CAPABILITY_NAMED_IAM \
+#  --region us-east-1
