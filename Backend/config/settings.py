@@ -67,6 +67,11 @@ class Settings(BaseSettings):
         env="EXECUTION_MODE"
     )
 
+    emr_application_id: str = Field(..., env="EMR_APPLICATION_ID")
+    emr_execution_role_arn: str = Field(..., env="EMR_EXECUTION_ROLE_ARN")
+    emr_job_entry_s3: str = Field(..., env="EMR_JOB_ENTRY_S3")
+    emr_log_s3_uri: str = Field(..., env="EMR_LOG_S3_URI")
+
     # -------------------- Validators --------------------
     @validator("execution_mode")
     def validate_execution_mode(cls, v):

@@ -2,9 +2,7 @@
 
 from config.settings import settings
 from execution.local_pyspark_executor import LocalPySparkExecutor
-# future
-# from execution.databricks_executor import DatabricksExecutor
-# from execution.emr_executor import EMRExecutor
+from execution.emr_serverless_executor import EMRServerlessExecutor
 
 
 def get_executor():
@@ -15,6 +13,6 @@ def get_executor():
         return DatabricksExecutor()
 
     if settings.execution_mode == "emr":
-        return EMRExecutor()
+        return EMRServerlessExecutor()
 
     raise ValueError("Invalid execution mode")
