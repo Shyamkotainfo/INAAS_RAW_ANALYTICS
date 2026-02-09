@@ -1,20 +1,29 @@
-# Backend/query_generation/pyspark_generator.py
-
-from llm.llm_query import invoke_llm
-from pyspark_utils.code_sanitizer import strip_code_fences, rewrite_common_pyspark_imports
-from pyspark_utils.code_validator import validate_pyspark_code
+from logger.logger import get_logger
+from llm.llm_query import LLMQuery
 from prompt.pyspark_code_gen import get_pyspark_prompt
+
+logger = get_logger(__name__)
 
 
 class PySparkCodeGenerator:
-    def generate(self, question: str, context: dict) -> str:
-        column_list = ", ".join(
-            f"{c['name']} ({c['type']})" for c in context["columns"]
-        )
+    def __init__(self):
+        self.llm = LLMQuery()
 
-        prompt = get_pyspark_prompt(column_list, question)
-        raw_code = invoke_llm(prompt)
-        code = strip_code_fences(raw_code)
-        code = rewrite_common_pyspark_imports(code)
-        validate_pyspark_code(code)
+    def generate(self, question: str, context: dict) -> str:
+        columns = ", ".join(c["name"] for c in context["columns"])
+        prompt = get_pyspark_prompt(columns, question)
+
+        logger.info("Sending PySpark generation prompt to LLM")
+
+        code = self.llm.generate(prompt).strip()
+
+        logger.info("Received PySpark code from LLM")
+
+        if "final_df" not in code:
+            logger.error("Generated code:\n%s", code)
+            raise RuntimeError(
+                "LLM failed to generate executable PySpark code "
+                "(missing final_df)"
+            )
+
         return code

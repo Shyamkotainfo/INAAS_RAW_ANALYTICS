@@ -1,35 +1,40 @@
 # Backend/core/query_orchestrator.py
 
+from logger.logger import get_logger
+from config.settings import settings
 from rag.kb_retriever import KnowledgeBaseRetriever
 from rag.context_builder import build_query_context
 from query_generation.pyspark_generator import PySparkCodeGenerator
-from execution.local_pyspark_executor import LocalPySparkExecutor
-from summarization.result_summarizer import ResultSummarizer
+from execution.databricks_executor import DatabricksExecutor
+from execution.emr_executor import EMRExecutor
+
+logger = get_logger(__name__)
 
 
 class QueryOrchestrator:
     def __init__(self):
         self.retriever = KnowledgeBaseRetriever()
         self.codegen = PySparkCodeGenerator()
-        self.executor = LocalPySparkExecutor()
-        self.summarizer = ResultSummarizer()
 
-    def run(self, question: str):
+        if settings.execution_mode == "databricks":
+            self.executor = DatabricksExecutor()
+        elif settings.execution_mode == "emr":
+            self.executor = EMRExecutor()
+        else:
+            raise ValueError("Invalid execution mode")
 
-        # ----- Retrieve docs from VectorStore-------
+    def run(self, question: str) -> dict:
+        logger.info("User question: %s", question)
 
         chunks = self.retriever.retrieve(question)
         context = build_query_context(chunks)
 
-        if not context.get("file_id"):
-            raise RuntimeError("File path could not be resolved from KB rag")
-
         pyspark_code = self.codegen.generate(question, context)
-        rows = self.executor.execute(context["file_id"], pyspark_code)
+        logger.info("Generated PySpark code:\n%s", pyspark_code)
+
+        execution = self.executor.execute(context, pyspark_code)
 
         return {
             "pyspark_code": pyspark_code,
-            "result": rows,
-            # "summary": self.summarizer.summarize(question, rows[:10])
+            "execution": execution,
         }
-
