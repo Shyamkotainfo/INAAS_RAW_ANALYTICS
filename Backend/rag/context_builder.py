@@ -1,99 +1,92 @@
 import json
 import re
-from typing import List, Dict
+from logger.logger import get_logger
+
+logger = get_logger(__name__)
 
 
-S3_PATH_REGEX = re.compile(r"s3a://[a-zA-Z0-9\-_/\.]+")
-FORMAT_REGEX = re.compile(r"\b(csv|parquet|json|orc|avro)\b", re.IGNORECASE)
-
-
-def build_query_context(chunks: List[str]) -> Dict:
+def build_query_context(chunks: list[str]) -> dict:
     """
-    Build execution context from Bedrock KB chunks.
+    Build execution context from KB chunks.
 
-    Bedrock returns unstructured text, NOT guaranteed JSON.
-    We must extract signals defensively.
+    Expected to extract:
+    - file_path
+    - format
+    - columns: [{name, type}]
     """
 
-    file_path = None
-    file_format = None
-    columns = {}
+    context = {
+        "file_path": None,
+        "format": "csv",
+        "columns": []
+    }
 
     for chunk in chunks:
-        if not chunk:
-            continue
-
-        chunk = chunk.strip()
-
-        # --------------------------------------------------
-        # 1. Try JSON parsing (best case)
-        # --------------------------------------------------
+        # ---------- Try JSON first ----------
         try:
             data = json.loads(chunk)
 
-            if isinstance(data, dict):
-                file_path = file_path or data.get("file_path") or data.get("file_id")
-                file_format = file_format or data.get("format")
+            # file path
+            if not context["file_path"]:
+                if "file_path" in data:
+                    context["file_path"] = data["file_path"]
+                elif "data_location" in data:
+                    context["file_path"] = data["data_location"].get("path")
 
-                if "columns" in data:
-                    for col in data["columns"]:
-                        name = col.get("name")
-                        if name:
-                            columns[name] = {
-                                "name": name,
-                                "type": col.get("type", "string")
-                            }
+            # format
+            if "format" in data:
+                context["format"] = data["format"]
 
-                continue
+            # columns
+            if "columns" in data:
+                for c in data["columns"]:
+                    if "name" in c:
+                        context["columns"].append({
+                            "name": c["name"],
+                            "type": c.get("type", "string")
+                        })
+
+            continue
+
         except Exception:
-            pass  # expected for KB chunks
+            pass  # Not JSON, fall back to text parsing
 
-        # --------------------------------------------------
-        # 2. Extract S3 path from raw text
-        # --------------------------------------------------
-        if not file_path:
-            match = S3_PATH_REGEX.search(chunk)
-            if match:
-                file_path = match.group(0)
+        # ---------- Fallback: regex-based extraction ----------
+        if not context["file_path"]:
+            m = re.search(r"/Volumes/[^\s\"']+", chunk)
+            if m:
+                context["file_path"] = m.group(0)
 
-        # --------------------------------------------------
-        # 3. Extract file format
-        # --------------------------------------------------
-        if not file_format:
-            match = FORMAT_REGEX.search(chunk)
-            if match:
-                file_format = match.group(1).lower()
+        # column names like: "name": "EmpCode"
+        for match in re.findall(r'"name"\s*:\s*"([^"]+)"', chunk):
+            context["columns"].append({
+                "name": match,
+                "type": "string"
+            })
 
-        # --------------------------------------------------
-        # 4. Heuristic column extraction
-        # --------------------------------------------------
-        # Looks for patterns like:
-        # EmpCode StringType()
-        # Name StringType()
-        tokens = chunk.split()
-        if len(tokens) >= 2 and "Type" in tokens[1]:
-            col_name = tokens[0].strip(",")
-            col_type = tokens[1]
-
-            columns[col_name] = {
-                "name": col_name,
-                "type": col_type
-            }
-
-    # --------------------------------------------------
-    # Final validation
-    # --------------------------------------------------
-    if not file_path:
-        raise ValueError(
-            "file_path could not be inferred from KB chunks. "
-            "Ensure metadata contains s3a:// paths."
+    # ---------- Final validation ----------
+    if not context["file_path"]:
+        raise RuntimeError(
+            "file_path could not be inferred from KB chunks"
         )
 
-    if not file_format:
-        file_format = file_path.rsplit(".", 1)[-1].lower()
+    # Deduplicate columns
+    seen = set()
+    unique_cols = []
+    for c in context["columns"]:
+        if c["name"] not in seen:
+            seen.add(c["name"])
+            unique_cols.append(c)
 
-    return {
-        "file_path": file_path,
-        "format": file_format,
-        "columns": list(columns.values())
-    }
+    context["columns"] = unique_cols
+
+    if not context["columns"]:
+        raise RuntimeError("No columns available in query context")
+
+    logger.info(
+        "Query context built | file_path=%s | columns=%d",
+        context["file_path"],
+        len(context["columns"])
+    )
+
+    return context

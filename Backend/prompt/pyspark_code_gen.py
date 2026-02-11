@@ -1,37 +1,84 @@
-from prompt.base_rules import base_rules
-
-
 def get_pyspark_prompt(columns: str, question: str) -> str:
     return f"""
-You are generating PySpark transformation code.
+You are generating PySpark DataFrame transformation code.
 
-Rules:
-- A DataFrame named `df` already exists
-- Use only the columns listed below
-- Use pyspark.sql.functions as F
-- Do NOT read files
-- Do NOT create SparkSession
-- Do NOT write data
-- Output ONLY valid Python code
-- Final output must be a DataFrame named `final_df`
+==============================
+ABSOLUTE RULES (NO EXCEPTIONS)
+==============================
 
-Available columns:
+- A DataFrame named `df` already exists.
+- Use ONLY PySpark DataFrame APIs.
+- Use `pyspark.sql.functions` strictly as `F`.
+- NEVER import anything.
+- NEVER use SQL strings or spark.sql().
+- NEVER use groupBy unless the user explicitly asks for grouping.
+- NEVER use crossJoin.
+- NEVER create intermediate DataFrames.
+- Output ONLY executable Python code.
+- The final result MUST be a DataFrame named `final_df`.
+- All string functions MUST be called via pyspark.sql.functions as F (e.g., F.upper(F.trim(F.col("x"))))
+- NEVER call upper(), lower(), trim(), col() directly.
+- ALWAYS use F.upper(F.trim(F.col("<column>")))
+
+FUNCTION USAGE RULES (MANDATORY)
+
+- ALL functions MUST be referenced via `F.<function>`.
+- NEVER use bare functions like count(), col(), sum(), avg().
+- Conditional counts MUST be written as:
+  F.sum(F.when(condition, 1).otherwise(0))
+
+==============================
+SUMMARY RULE (VERY STRICT)
+==============================
+
+If the user asks for a "summary":
+
+- Produce EXACTLY ONE `df.select(...)`
+- Output MUST be a single-row DataFrame
+- Allowed metrics ONLY:
+  - total row count
+  - distinct counts
+  - conditional counts
+  -FTE/CONSULTANTS
+- DO NOT infer grouping columns
+- DO NOT compute salary metrics unless explicitly requested
+- DO NOT compute date min/max unless explicitly requested
+
+==============================
+SALARY HANDLING RULE
+==============================
+
+If salary metrics are explicitly requested:
+
+- Salary columns are text-based
+- NEVER operate on raw salary column
+- ALWAYS create a derived numeric expression using:
+  F.regexp_replace(col, '[^0-9.]', '')
+- Safely cast to double before aggregation
+
+=================================================================
+For questions like "employee worked as manager in their career":
+=================================================================
+- Apply a single df.filter() that checks ALL role/title columns (current + previous) using case-insensitive matching.
+- Always reference columns using F.col("<column>") and apply F.upper(F.trim(...)).contains("MANAGER"); never use col() directly.
+
+
+==============================
+ROLE / DESIGNATION MATCHING
+==============================
+
+- Matching must be case-insensitive
+- Normalize using: F.upper(F.trim(F.col(col_name)))
+- Career-wide role questions must check ALL role/title columns
+- Use `contains()` after normalization
+
+==============================
+AVAILABLE COLUMNS
+==============================
 {columns}
 
-User question:
+==============================
+USER QUESTION
+==============================
 {question}
-
-IMPORTANT:
-- Do NOT use Markdown
-- Do NOT include ``` or ```python
-- Do NOT import any modules
-- Use F.<function>() only
-- NEVER use `.count()`
-- For counting rows, ALWAYS use:
-  final_df = df.select(F.count("*").alias("<name>"))
-- For grouped counts, ALWAYS use:
-  final_df = df.groupBy("<col>").agg(F.count("*").alias("<name>"))
-
-Rules:
-{base_rules}
 """

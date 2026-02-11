@@ -54,7 +54,8 @@ class Settings(BaseSettings):
     databricks_host: Optional[str] = Field(None, env="DATABRICKS_HOST")
     databricks_token: Optional[str] = Field(None, env="DATABRICKS_TOKEN")
     databricks_cluster_id: Optional[str] = Field(None, env="DATABRICKS_CLUSTER_ID")
-
+    databricks_default_file_path: Optional[str] = Field(None, env="DATABRICKS_DEFAULT_FILE_PATH")
+    
     databricks_run_query_script: str = Field(
         "dbfs:/inaas/jobs/run_query.py",
         env="DATABRICKS_RUN_QUERY_SCRIPT"

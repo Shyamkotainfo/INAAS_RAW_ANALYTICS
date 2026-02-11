@@ -1,5 +1,3 @@
-# Backend/main.py
-
 from core.query_orchestrator import QueryOrchestrator
 
 
@@ -25,27 +23,27 @@ def main():
 
             response = orchestrator.run(user_input)
 
-            if "sql" in response:
-                print("\n--- Generated SQL ---\n")
-                print(response["sql"])
+            print("\n--- Generated PySpark Code ---\n")
+            print(response["pyspark_code"])
 
-                print("\n--- Result ---")
-                result = response["result"]
-                print("Columns:", result["columns"])
-                for row in result["rows"]:
-                    print(row)
-            else:
-                print("\n--- Generated PySpark Code ---\n")
-                print(response["pyspark_code"])
+            execution = response["execution"]
 
-                print("\n--- Execution Status ---")
-                for k, v in response["execution"].items():
-                    print(f"{k}: {v}")
+            if execution["status"] != "SUCCESS":
+                print("\n--- Execution Failed ---")
+                print(execution.get("error"))
+                continue
+
+            print("\n--- Result ---")
+            print("Columns:", execution["result"]["columns"])
+            for row in execution["result"]["rows"]:
+                print(row)
 
         except KeyboardInterrupt:
             print("\nGoodbye!")
             break
+
         except Exception as e:
+            # Keep chat alive
             print("\nERROR:", str(e))
 
 
