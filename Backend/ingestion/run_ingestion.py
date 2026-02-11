@@ -3,8 +3,6 @@ from config.settings import settings
 from logger.logger import get_logger
 
 from ingestion.databricks_ingestion_executor import DatabricksIngestionExecutor
-from ingestion.emr_ingestion_executor import EMRIngestionExecutor
-
 logger = get_logger(__name__)
 
 
@@ -24,21 +22,6 @@ def main():
         result = executor.run()
 
         logger.info("Databricks ingestion job submitted")
-        logger.info(result)
-
-    elif settings.execution_mode == "emr":
-        logger.info("Using EMR Serverless for schema ingestion")
-
-        if not settings.emr_application_id:
-            raise RuntimeError("EMR_APPLICATION_ID is not set")
-
-        if not settings.emr_schema_extractor_script:
-            raise RuntimeError("EMR_SCHEMA_EXTRACTOR_SCRIPT is not set")
-
-        executor = EMRIngestionExecutor()
-        result = executor.run()
-
-        logger.info("EMR ingestion job submitted")
         logger.info(result)
 
     else:
