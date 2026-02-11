@@ -1,6 +1,7 @@
 # Backend/api/fast_api.py
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from core.query_orchestrator import QueryOrchestrator
 from logger.logger import get_logger
@@ -11,6 +12,15 @@ app = FastAPI(
     title="INAAS Analytics API",
     description="Natural language analytics over raw datasets",
     version="1.0.0"
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allows all headers
 )
 
 orchestrator = QueryOrchestrator()
@@ -56,7 +66,18 @@ def run_query(request: QueryRequest):
 
         response = orchestrator.run(request.user_input)
 
-        return response
+        return {
+                "success": True,
+                "data": {
+                    "user_input": response.get("user_input"),
+                    "pyspark": response.get("pyspark"),
+                    "results": response.get("results"),
+                    "insights": response.get("insights")
+                },
+                "error": None,
+                "message": "Query processed successfully"
+            }
+
 
     except Exception as e:
         logger.exception("API Error")
@@ -64,4 +85,3 @@ def run_query(request: QueryRequest):
             status_code=500,
             detail=str(e)
         )
- 
