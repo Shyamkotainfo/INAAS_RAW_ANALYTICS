@@ -1,4 +1,5 @@
 from core.query_orchestrator import QueryOrchestrator
+import json
 
 
 def main():
@@ -23,27 +24,14 @@ def main():
 
             response = orchestrator.run(user_input)
 
-            print("\n--- Generated PySpark Code ---\n")
-            print(response["pyspark_code"])
-
-            execution = response["execution"]
-
-            if execution["status"] != "SUCCESS":
-                print("\n--- Execution Failed ---")
-                print(execution.get("error"))
-                continue
-
-            print("\n--- Result ---")
-            print("Columns:", execution["result"]["columns"])
-            for row in execution["result"]["rows"]:
-                print(row)
+            print("\n========== RESPONSE ==========\n")
+            print(json.dumps(response, indent=2))
 
         except KeyboardInterrupt:
             print("\nGoodbye!")
             break
 
         except Exception as e:
-            # Keep chat alive
             print("\nERROR:", str(e))
 
 

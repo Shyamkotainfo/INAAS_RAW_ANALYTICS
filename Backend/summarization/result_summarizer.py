@@ -1,15 +1,14 @@
-# Backend/summarization/result_summarizer.py
 from llm.llm_query import invoke_llm
 
 
 class ResultSummarizer:
     def summarize(self, question: str, rows: list[dict]) -> str:
         """
-        Generate a natural-language summary of query results.
+        Generate business-friendly insights from query results.
         """
 
         prompt = f"""
-You are a data analyst assistant.
+You are a senior data analyst.
 
 User question:
 {question}
@@ -17,8 +16,13 @@ User question:
 Query result (sample rows):
 {rows}
 
-Provide a clear, concise, business-friendly explanation of the result.
-Do NOT mention technical details like Spark, DataFrames, or code.
+Generate:
+1. A concise explanation of what the result shows.
+2. Key insights or patterns.
+3. Any notable trends or anomalies (if applicable).
+
+Do NOT mention Spark, PySpark, code, or technical details.
+Write in a clear, business-friendly tone.
 """
 
         return invoke_llm(
