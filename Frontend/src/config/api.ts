@@ -7,7 +7,7 @@ export const API_CONFIG = {
   BASE_URL: APP_CONFIG.BASE_URL,
   ENDPOINTS: {
     QUERY: "/query",
-    Docs:"/docs",
+    Docs: "/docs",
   },
 };
 export interface MetricBlock {
@@ -43,12 +43,10 @@ export interface ChatResponse {
 
   error?: string;
   reason?: string; // Optional reason at top-level for errors
-  catalog_options?: string[]; // Optional catalog options on conflict
-  conflicts?: string[]; // Optional conflicts list on catalog conflict
   tab_id?: string;
   insights?: string;
   user_input?: string;
-  show?:boolean;
+  show?: boolean;
   // Optional tab_id string
 }
 // export interface AnalyticsReport {
@@ -64,15 +62,15 @@ export interface AnalyticsResponse {
 }
 export interface ChartData {
   type:
-    | "line"
-    | "bar"
-    | "pie"
-    | "doughnut"
-    | "area"
-    | "radar"
-    | "polarArea"
-    | "bubble"
-    | "scatter";
+  | "line"
+  | "bar"
+  | "pie"
+  | "doughnut"
+  | "area"
+  | "radar"
+  | "polarArea"
+  | "bubble"
+  | "scatter";
   title: string;
   data: Record<string, unknown>; // Replaced any with Record<string, unknown>
   options?: Record<string, unknown>; // Replaced any with Record<string, unknown>

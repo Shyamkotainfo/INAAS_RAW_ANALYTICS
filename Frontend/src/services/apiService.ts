@@ -10,17 +10,11 @@ class ApiService {
 
   async sendChatPrompt(
     prompt: string,
-    preferredCatalog: string = "",
     signal?: AbortSignal,
-    id: string = "",
-    dw_value = "databricks"
+    id: string = ""
   ): Promise<ChatResponse> {
     // Cancel previous request if it exists
-    console.log(this.abortController, signal,dw_value);
-
-    // if (this.abortController && this.tabID == id  && !this.abortController.signal.aborted) {
-    //   this.abortController.abort();
-    // }
+    console.log(this.abortController, signal);
 
     // Create new AbortController for this request
     const controller = new AbortController();
@@ -29,15 +23,6 @@ class ApiService {
     // Use external signal if provided, otherwise use controller's signal
     // If external signal is aborted, abort the controller too
     console.log(signal, "signal");
-    // if (signal) {
-    //   if (signal.aborted) {
-    //     controller.abort();
-    //   } else {
-    //     signal.addEventListener("abort", () => {
-    //       controller.abort();
-    //     });
-    //   }
-    // }
 
     try {
       console.log(signal, "signal");
@@ -51,9 +36,7 @@ class ApiService {
             "x-tab-id": id ?? "",
           },
           body: JSON.stringify({
-            prompt,
-            preferred_catalog: preferredCatalog,
-            dw_type: dw_value,
+            user_input: prompt,
           }),
           signal: controller.signal,
         }
@@ -150,8 +133,8 @@ class ApiService {
                   typeof d.message === "string"
                     ? (d.message as string)
                     : typeof inner.message === "string"
-                    ? (inner.message as string)
-                    : "Data retrieved successfully",
+                      ? (inner.message as string)
+                      : "Data retrieved successfully",
                 insights:
                   typeof inner.insights === "string"
                     ? (inner.insights as string)
@@ -185,8 +168,8 @@ class ApiService {
                   typeof d.message === "string"
                     ? (d.message as string)
                     : typeof inner.message === "string"
-                    ? (inner.message as string)
-                    : "Query processed successfully",
+                      ? (inner.message as string)
+                      : "Query processed successfully",
                 insights:
                   typeof inner.insights === "string"
                     ? (inner.insights as string)
@@ -249,8 +232,8 @@ class ApiService {
           const rawData =
             columns.length > 0 && rawRows.length > 0
               ? rawRows.map((row) =>
-                  Object.fromEntries(columns.map((c, i) => [c, row[i]]))
-                )
+                Object.fromEntries(columns.map((c, i) => [c, row[i]]))
+              )
               : [];
 
           metrics[key] = {
@@ -299,8 +282,8 @@ class ApiService {
             typeof d.reason === "string"
               ? (d.reason as string)
               : typeof d.message === "string"
-              ? (d.message as string)
-              : undefined,
+                ? (d.message as string)
+                : undefined,
         };
       }
 
@@ -323,8 +306,8 @@ class ApiService {
             error: hasReason
               ? (detail.reason as string)
               : typeof detail.message === "string"
-              ? (detail.message as string)
-              : "Unknown error",
+                ? (detail.message as string)
+                : "Unknown error",
             reason: hasReason ? (detail.reason as string) : undefined,
           };
         }
@@ -343,16 +326,16 @@ class ApiService {
               (typeof d.error === "string"
                 ? (d.error as string)
                 : typeof d.message === "string"
-                ? (d.message as string)
-                : undefined)) ||
+                  ? (d.message as string)
+                  : undefined)) ||
             `HTTP error ${response.status}`,
           reason:
             d &&
             (typeof d.reason === "string"
               ? (d.reason as string)
               : typeof d.message === "string"
-              ? (d.message as string)
-              : undefined),
+                ? (d.message as string)
+                : undefined),
         };
       }
 
@@ -365,8 +348,8 @@ class ApiService {
             (typeof data.error === "string"
               ? (data.error as string)
               : typeof data.message === "string"
-              ? (data.message as string)
-              : undefined)) ||
+                ? (data.message as string)
+                : undefined)) ||
           "Unknown error occurred",
         reason:
           isObject(data) && typeof data.reason === "string"

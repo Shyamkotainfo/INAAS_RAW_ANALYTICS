@@ -16,17 +16,11 @@ import DocumentIcon from "../asserts/Download-icon.svg";
 import { Mic, Send } from "lucide-react";
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   Button,
   Box,
   Typography,
-  FormControl,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
-  Divider,
 } from "@mui/material";
 import Prism from "prismjs";
 import "prismjs/themes/prism.css"; // You can change theme later
@@ -146,11 +140,11 @@ const ChatInterface: React.FC = () => {
   const [recognition, setRecognition] =
     useState<MinimalSpeechRecognition | null>(null);
   const [hasInterimResults, setHasInterimResults] = useState(false);
-  const [showCatalogModal, setShowCatalogModal] = useState(false);
-  const [catalogOptions, setCatalogOptions] = useState<string[]>([]);
-  const [, setConflicts] = useState<string[]>([]);
-  const [selectedCatalog, setSelectedCatalog] = useState<string>("");
-  const [pendingPrompt, setPendingPrompt] = useState<string>("");
+  // const [showCatalogModal, setShowCatalogModal] = useState(false);
+  // const [catalogOptions, setCatalogOptions] = useState<string[]>([]);
+  // const [, setConflicts] = useState<string[]>([]);
+  // const [selectedCatalog, setSelectedCatalog] = useState<string>("");
+  // const [pendingPrompt, setPendingPrompt] = useState<string>("");
   // const [chartIndex, setChartIndex] = useState(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -400,55 +394,55 @@ const ChatInterface: React.FC = () => {
     description: string;
     icon: string;
   }> = [
-    {
-      value: "bar",
-      label: "Bar Chart",
-      description: "For categorical comparisons",
-      icon: "📊",
-    },
-    {
-      value: "line",
-      label: "Line Chart",
-      description: "For time series and trends",
-      icon: "📈",
-    },
-    {
-      value: "pie",
-      label: "Pie Chart",
-      description: "For proportional data",
-      icon: "🥧",
-    },
-    {
-      value: "doughnut",
-      label: "Doughnut Chart",
-      description: "For proportional data with center space",
-      icon: "🍩",
-    },
-    {
-      value: "radar",
-      label: "Radar Chart",
-      description: "For multi-dimensional data comparison",
-      icon: "🕸️",
-    },
-    {
-      value: "polarArea",
-      label: "Polar Area Chart",
-      description: "For circular proportional data",
-      icon: "⚪",
-    },
-    {
-      value: "bubble",
-      label: "Bubble Chart",
-      description: "For 3D data visualization",
-      icon: "🫧",
-    },
-    {
-      value: "scatter",
-      label: "Scatter Chart",
-      description: "For correlation analysis",
-      icon: "🔍",
-    },
-  ];
+      {
+        value: "bar",
+        label: "Bar Chart",
+        description: "For categorical comparisons",
+        icon: "📊",
+      },
+      {
+        value: "line",
+        label: "Line Chart",
+        description: "For time series and trends",
+        icon: "📈",
+      },
+      {
+        value: "pie",
+        label: "Pie Chart",
+        description: "For proportional data",
+        icon: "🥧",
+      },
+      {
+        value: "doughnut",
+        label: "Doughnut Chart",
+        description: "For proportional data with center space",
+        icon: "🍩",
+      },
+      {
+        value: "radar",
+        label: "Radar Chart",
+        description: "For multi-dimensional data comparison",
+        icon: "🕸️",
+      },
+      {
+        value: "polarArea",
+        label: "Polar Area Chart",
+        description: "For circular proportional data",
+        icon: "⚪",
+      },
+      {
+        value: "bubble",
+        label: "Bubble Chart",
+        description: "For 3D data visualization",
+        icon: "🫧",
+      },
+      {
+        value: "scatter",
+        label: "Scatter Chart",
+        description: "For correlation analysis",
+        icon: "🔍",
+      },
+    ];
 
   const quickQueries = useMemo(
     () => [
@@ -689,7 +683,6 @@ const ChatInterface: React.FC = () => {
   }
   const handleSubmit = async (
     e: React.FormEvent,
-    preferredCatalog: string = "",
     overridePrompt?: string
   ) => {
     e.preventDefault();
@@ -724,26 +717,14 @@ const ChatInterface: React.FC = () => {
     setIsLoading(true);
     setIsInputUsed(true);
 
-    let openedCatalogModal = false;
+
     try {
-      // Use real API service with preferred_catalog and abort signal
+      // Use real API service
       const chatResponse = await apiService.sendChatPrompt(
         currentPrompt,
-        preferredCatalog,
         controller.signal,
         requestTab
       );
-
-    
-      // Check for catalog conflicts
-      if (!chatResponse.success && chatResponse.catalog_options) {
-        setCatalogOptions(chatResponse.catalog_options);
-        setConflicts(chatResponse.conflicts || []);
-        setPendingPrompt(currentPrompt);
-        setShowCatalogModal(true);
-        openedCatalogModal = true;
-        return;
-      }
 
       // If API returned an error (non-conflict), show modal but do not create a result card
       if (!chatResponse.success) {
@@ -828,8 +809,8 @@ const ChatInterface: React.FC = () => {
               rawData: hasRawData
                 ? rawDataArray ?? []
                 : hasResultsData
-                ? resultsArray ?? []
-                : [],
+                  ? resultsArray ?? []
+                  : [],
 
               insights: block.insights,
               sql: block.sql,
@@ -899,8 +880,8 @@ const ChatInterface: React.FC = () => {
           rawData: hasRawData
             ? rawDataArray ?? []
             : hasResultsData
-            ? resultsArray ?? []
-            : [],
+              ? resultsArray ?? []
+              : [],
           chartTypes: {},
           resultId: `result-${Date.now()}-${Math.random()
             .toString(36)
@@ -955,284 +936,33 @@ const ChatInterface: React.FC = () => {
         // if (activeTabRef.current === requestTab) {
         //   setResponses([...tabStateRef.current[requestTab].responses]);
         // }
-// --- Insert new per-tab response logic ---
-const tabBucket = tabStateRef.current[requestTab];
+        // --- Insert new per-tab response logic ---
+        const tabBucket = tabStateRef.current[requestTab];
 
-const currentList = tabBucket.responses;
-const updated = [...currentList, newResult];
+        const currentList = tabBucket.responses;
+        const updated = [...currentList, newResult];
 
-// Save to storage
-storageService.saveResponse({
-  response: newResult.response,
-  rawData: newResult.rawData,
-  chartTypes: newResult.chartTypes as { [key: number]: string },
-  resultId: newResult.resultId,
-  tab_id: requestTab,
-}).catch((err) => console.error("Error saving response:", err));
+        // Save to storage
+        storageService.saveResponse({
+          response: newResult.response,
+          rawData: newResult.rawData,
+          chartTypes: newResult.chartTypes as { [key: number]: string },
+          resultId: newResult.resultId,
+          tab_id: requestTab,
+        }).catch((err) => console.error("Error saving response:", err));
 
-// Enforce per-tab memory limit
-if (updated.length > MAX_IN_MEMORY_RESPONSES) {
-  manageResponseLimit(updated);
-  tabBucket.responses =
-    updated.slice(updated.length - MAX_IN_MEMORY_RESPONSES);
-} else {
-  tabBucket.responses = updated;
-}
-
-// Update UI only if active tab matches
-if (activeTabRef.current === requestTab) {
-  setResponses([...tabBucket.responses]);
-}
-
-        setGlobalChartIndex((prev) => prev + 1);
-      } else if (chatResponse.success && chatResponse.data?.chat_response) {
-        // Conversation-only: open dialog, do not create a card
-        setErrorMessage("");
-        setDialogApiData({
-          user_input: chatResponse.data.user_input || "",
-          chat_response: chatResponse.data.chat_response || "",
-        });
-        setIsErrorOpen(true);
-      }
-    } catch (error) {
-      // Don't show error if request was cancelled
-      if (error instanceof Error && error.message === "Request cancelled") {
-        return;
-      }
-      console.error("Error sending prompt:", error);
-      setErrorMessage("Failed to get response");
-      setIsErrorOpen(true);
-    } finally {
-      if (!openedCatalogModal) {
-        setIsLoading(false);
-      }
-      // Clear abort controller reference
-      if (abortControllerRef.current === controller) {
-        abortControllerRef.current = null;
-      }
-    }
-  };
-
-  const handleCatalogSelection = async () => {
-    if (!selectedCatalog || !pendingPrompt) return;
-
-    setShowCatalogModal(false);
-    setSelectedCatalog("");
-    setConflicts([]);
-    const requestTab = activeTabRef.current;
-
-    // Cancel previous request if it exists
-    // if (abortControllerRef.current) {
-    //   abortControllerRef.current.abort();
-    // // }
-    // apiService.cancelRequest();
-
-    // Create new AbortController for this request
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setIsLoading(true);
-
-    try {
-      const chatResponse = await apiService.sendChatPrompt(
-        pendingPrompt,
-        selectedCatalog,
-        controller.signal,
-        requestTab
-      );
-      // if (activeTabRef.current !== requestTab) {
-      //   console.warn("Skipping response because user switched tab");
-      //   return;
-      // }
-      // If API returned an error (non-conflict), show modal but do not create a result card
-      if (!chatResponse.success) {
-        const reason =
-          chatResponse.data?.reason ||
-          chatResponse.reason ||
-          chatResponse.error ||
-          "An error occurred while processing your request.";
-        setErrorMessage(reason);
-        return;
-      }
-      console.log(chatResponse, "chatResponseresponseDatachatResponse");
-
-      // 🧠 Detect dynamic metric blocks in chatResponse.data
-      if (chatResponse.data && typeof chatResponse.data === "object") {
-        const metricKeys = Object.keys(chatResponse.data).filter((key) =>
-          isMetricBlock(chatResponse.data[key as keyof ChatResponse["data"]])
-        ) as (keyof ChatResponse["data"])[];
-        if (metricKeys.length > 0) {
-          const headingText =
-            chatResponse.data.user_prompt ||
-            chatResponse.data.user_input ||
-            null;
-          console.log(headingText, "chatResponseresponseDatachatResponse");
-
-          if (headingText) {
-            const headingResult = {
-              response: {
-                data: {
-                  user_input:
-                    typeof headingText === "string"
-                      ? (headingText as string)
-                      : undefined,
-                },
-                success: true,
-                tab_id: requestTab,
-                show: false,
-              },
-              sql: "",
-              title: headingText,
-              chartTypes: {},
-              rawData: [],
-              resultId: `heading-${Date.now()}`,
-              tab_id: requestTab,
-              section: "heading",
-            };
-
-            if (!tabStateRef.current[requestTab]) {
-              tabStateRef.current[requestTab] = {
-                responses: [],
-                isInputUsed: true,
-              };
-            }
-            console.log(headingResult, "chatResponseresponseDatachatResponse");
-
-            tabStateRef.current[requestTab].responses.push(headingResult);
-          }
-          metricKeys.forEach((sec) => {
-            const block = chatResponse.data[sec] as MetricBlock;
-
-            if (!block) return;
-            console.log(block, "chatResponseresponseDatachatResponse");
-
-            const rawDataArray = Array.isArray(block.rawData)
-              ? block.rawData
-              : undefined;
-            const resultsArray = Array.isArray(block.results)
-              ? block.results
-              : undefined;
-
-            const hasRawData = !!rawDataArray && rawDataArray.length > 0;
-            const hasResultsData = !!resultsArray && resultsArray.length > 0;
-
-            const newResult = {
-              response: {
-                data: { ...block, show: true },
-                success: true,
-                tab_id: requestTab,
-                show: true,
-              },
-
-              rawData: hasRawData
-                ? rawDataArray ?? []
-                : hasResultsData
-                ? resultsArray ?? []
-                : [],
-
-              insights: block.insights,
-              sql: block.sql,
-              title: block.title,
-              // user_input: block.title,
-              section: sec,
-              chartTypes: {},
-              resultId: `result-${Date.now()}-${Math.random()
-                .toString(36)
-                .substring(2, 9)}`,
-              tab_id: requestTab,
-            };
-            console.log(newResult, "chatResponseresponseDatachatResponse");
-
-            if (!tabStateRef.current[requestTab]) {
-              tabStateRef.current[requestTab] = {
-                responses: [],
-                isInputUsed: true,
-              };
-            }
-
-            tabStateRef.current[requestTab].responses.push(newResult);
-          });
-        }
-
-        // Update UI only for active tab
-        if (activeTabRef.current === requestTab) {
-          setResponses([...tabStateRef.current[requestTab].responses]);
-        }
-      }
-      const responseData = chatResponse.data ?? {};
-      const rawDataArray = Array.isArray(responseData.rawData)
-        ? responseData.rawData
-        : undefined;
-      const resultsCandidate = (responseData as { results?: unknown[] })
-        .results;
-      const resultsArray = Array.isArray(resultsCandidate)
-        ? resultsCandidate
-        : undefined;
-      const hasRawData = !!rawDataArray && rawDataArray.length > 0;
-      const hasResultsData = !!resultsArray && resultsArray.length > 0;
-      const insightsValue =
-        typeof responseData.insights === "string"
-          ? responseData.insights.trim()
-          : "";
-      const hasInsights = insightsValue.length > 0;
-      const shouldCreateResultCard =
-        chatResponse.success && (hasRawData || hasResultsData || hasInsights);
-
-      // Add new result card if we have data to visualize or insights to share
-      if (shouldCreateResultCard) {
-        // Clear any previous error modal/state on success
-        setErrorMessage("");
-        // Open dialog if chat_response is present to display conversation response
-        if (chatResponse.data?.chat_response) {
-          setDialogApiData({
-            user_input: chatResponse.data.user_input || "",
-            chat_response: chatResponse.data.chat_response || "",
-          });
-          setIsErrorOpen(true);
+        // Enforce per-tab memory limit
+        if (updated.length > MAX_IN_MEMORY_RESPONSES) {
+          manageResponseLimit(updated);
+          tabBucket.responses =
+            updated.slice(updated.length - MAX_IN_MEMORY_RESPONSES);
         } else {
-          setIsErrorOpen(false);
-        }
-        chatResponse.show = true;
-        const newResult = {
-          response: { ...chatResponse, show: true },
-          rawData: hasRawData
-            ? rawDataArray ?? []
-            : hasResultsData
-            ? resultsArray ?? []
-            : [],
-          chartTypes: {},
-          resultId: `result-${Date.now()}-${Math.random()
-            .toString(36)
-            .substr(2, 9)}`,
-          tab_id: chatResponse?.tab_id,
-        };
-        console.log(newResult, "chatResponseresponseData");
-
-        const targetTab = requestTab;
-
-        if (!tabStateRef.current[targetTab]) {
-          tabStateRef.current[targetTab] = {
-            responses: [],
-            isInputUsed: false,
-          };
+          tabBucket.responses = updated;
         }
 
-        // ❗ If this result is NOT for the requesting tab → IGNORE IT COMPLETELY
-
-        // Safe to insert ONLY into origin tab
-        // Insert only inside correct tab
-        if (!tabStateRef.current[requestTab]) {
-          tabStateRef.current[requestTab] = {
-            responses: [],
-            isInputUsed: true,
-          };
-        }
-
-        tabStateRef.current[requestTab].responses.push(newResult);
-
-        // Update UI ONLY for activeTab
+        // Update UI only if active tab matches
         if (activeTabRef.current === requestTab) {
-          setResponses([...tabStateRef.current[requestTab].responses]);
+          setResponses([...tabBucket.responses]);
         }
 
         setGlobalChartIndex((prev) => prev + 1);
@@ -1255,13 +985,14 @@ if (activeTabRef.current === requestTab) {
       setIsErrorOpen(true);
     } finally {
       setIsLoading(false);
-      setPendingPrompt("");
       // Clear abort controller reference
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
       }
     }
   };
+
+
 
   // const handleChartTypeChange = (resultId: string, chartIndex: number, newType: string) => {
   //   setResponses(prev => prev.map(result =>
@@ -1736,13 +1467,13 @@ if (activeTabRef.current === requestTab) {
               label:
                 axisSelections?.x && axisSelections?.y
                   ? axisSelections.y
-                      .replace(/_/g, " ")
-                      .replace(/\b\w/g, (l) => l.toUpperCase())
+                    .replace(/_/g, " ")
+                    .replace(/\b\w/g, (l) => l.toUpperCase())
                   : axisSelections?.x && !axisSelections?.y
-                  ? labelKey
+                    ? labelKey
                       .replace(/_/g, " ")
                       .replace(/\b\w/g, (l) => l.toUpperCase())
-                  : valueKey
+                    : valueKey
                       .replace(/_/g, " ")
                       .replace(/\b\w/g, (l) => l.toUpperCase()),
               data: chartData,
@@ -2601,9 +2332,8 @@ if (activeTabRef.current === requestTab) {
         }
       });
 
-      const filename = `complete-report-${
-        new Date().toISOString().split("T")[0]
-      }.pdf`;
+      const filename = `complete-report-${new Date().toISOString().split("T")[0]
+        }.pdf`;
       doc.save(filename);
     } catch (err) {
       console.error("Failed to generate complete PDF", err);
@@ -2773,7 +2503,7 @@ if (activeTabRef.current === requestTab) {
           doc.setFont("helvetica", "normal");
           doc.setTextColor(0);
           cursorY += 20;
-        } catch {}
+        } catch { }
 
         const pageHeight: number = doc.internal.pageSize.getHeight();
         doc.setFontSize(12);
@@ -2952,9 +2682,8 @@ if (activeTabRef.current === requestTab) {
         }
       });
 
-      const filename = `selected-report-${
-        new Date().toISOString().split("T")[0]
-      }.pdf`;
+      const filename = `selected-report-${new Date().toISOString().split("T")[0]
+        }.pdf`;
       doc.save(filename);
       setIsGlobalDownloadOpen(false);
     } catch (err) {
@@ -3019,7 +2748,7 @@ if (activeTabRef.current === requestTab) {
                 }}
                 onClick={() => handleTabSwitch(tab.id)}
               >
-               
+
 
                 {editingTab === tab.id ? (
                   <input
@@ -3089,11 +2818,10 @@ if (activeTabRef.current === requestTab) {
         <main className="flex-1 flex flex-col">
           {/* Input Section */}
           <div
-            className={`transition-all duration-500 ease-in-out ${
-              isLanding
-                ? "flex-1 flex items-center justify-center px-6 min-h-0"
-                : "px-4 py-2"
-            }`}
+            className={`transition-all duration-500 ease-in-out ${isLanding
+              ? "flex-1 flex items-center justify-center px-6 min-h-0"
+              : "px-4 py-2"
+              }`}
             style={{
               marginTop: isLanding ? "0px" : "0px",
               minHeight: isLanding ? "calc(100vh - 200px)" : "auto",
@@ -3101,9 +2829,8 @@ if (activeTabRef.current === requestTab) {
             }}
           >
             <div
-              className={`w-full ${
-                isLanding ? "max-w-5xl mx-auto" : "max-w-7xl mx-auto"
-              }`}
+              className={`w-full ${isLanding ? "max-w-5xl mx-auto" : "max-w-7xl mx-auto"
+                }`}
             >
               {responses.length === 0 && !isLoading ? (
                 <div
@@ -3146,11 +2873,9 @@ if (activeTabRef.current === requestTab) {
                             onChange={(e) => setPrompt(e.target.value)}
                             onKeyDown={handleKeyDown}
                             placeholder="Your Thoughts, Transformed into Insights."
-                            className={`w-full resize-none border-2 outline-none text-sm leading-6 rounded-lg ${
-                              isInputUsed ? "p-2 pr-16" : "p-3 pr-20"
-                            } focus:ring-2 transition-all duration-200 ${
-                              hasInterimResults ? "italic" : ""
-                            }`}
+                            className={`w-full resize-none border-2 outline-none text-sm leading-6 rounded-lg ${isInputUsed ? "p-2 pr-16" : "p-3 pr-20"
+                              } focus:ring-2 transition-all duration-200 ${hasInterimResults ? "italic" : ""
+                              }`}
                             style={{
                               minHeight: isInputUsed ? "40px" : "60px",
                               borderColor: hasInterimResults
@@ -3178,9 +2903,8 @@ if (activeTabRef.current === requestTab) {
                             }}
                           />
                           <div
-                            className={`absolute right-4 bottom-4 flex items-center gap-3 ${
-                              isInputUsed ? "" : ""
-                            }`}
+                            className={`absolute right-4 bottom-4 flex items-center gap-3 ${isInputUsed ? "" : ""
+                              }`}
                           >
                             <button
                               type="button"
@@ -3190,11 +2914,10 @@ if (activeTabRef.current === requestTab) {
                                   ? "Stop listening"
                                   : "Start speech recognition"
                               }
-                              className={`p-3 rounded-full transition-colors ${
-                                isListening
-                                  ? "bg-red-500 text-white"
-                                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                              }`}
+                              className={`p-3 rounded-full transition-colors ${isListening
+                                ? "bg-red-500 text-white"
+                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                }`}
                             >
                               <Mic className="w-5 h-5" />
                             </button>
@@ -3202,11 +2925,10 @@ if (activeTabRef.current === requestTab) {
                               type="submit"
                               disabled={isLoading || !prompt.trim()}
                               title="Generate"
-                              className={`p-3 rounded-full transition-colors ${
-                                isLoading || !prompt.trim()
-                                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                  : "bg-green-600 text-white hover:bg-green-700"
-                              }`}
+                              className={`p-3 rounded-full transition-colors ${isLoading || !prompt.trim()
+                                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                : "bg-green-600 text-white hover:bg-green-700"
+                                }`}
                             >
                               {isLoading ? (
                                 <span className="animate-pulse">⋯</span>
@@ -3254,9 +2976,9 @@ if (activeTabRef.current === requestTab) {
                                   onClick={(e) => {
                                     e.preventDefault();
                                     const fakeEvent = {
-                                      preventDefault: () => {},
+                                      preventDefault: () => { },
                                     } as unknown as React.FormEvent;
-                                    handleSubmit(fakeEvent, "", q);
+                                    handleSubmit(fakeEvent, q);
                                   }}
                                   title={q}
                                 >
@@ -3265,7 +2987,7 @@ if (activeTabRef.current === requestTab) {
                                     style={{
                                       backgroundColor:
                                         quickQueryColors[
-                                          idx % quickQueryColors.length
+                                        idx % quickQueryColors.length
                                         ],
                                     }}
                                   />
@@ -3281,9 +3003,9 @@ if (activeTabRef.current === requestTab) {
                                   onClick={(e) => {
                                     e.preventDefault();
                                     const fakeEvent = {
-                                      preventDefault: () => {},
+                                      preventDefault: () => { },
                                     } as unknown as React.FormEvent;
-                                    handleSubmit(fakeEvent, "", q);
+                                    handleSubmit(fakeEvent, q);
                                   }}
                                 >
                                   <span
@@ -3291,7 +3013,7 @@ if (activeTabRef.current === requestTab) {
                                     style={{
                                       backgroundColor:
                                         quickQueryColors[
-                                          idx % quickQueryColors.length
+                                        idx % quickQueryColors.length
                                         ],
                                     }}
                                   />
@@ -3344,9 +3066,8 @@ if (activeTabRef.current === requestTab) {
               ) : (
                 <form onSubmit={handleSubmit} className="relative">
                   <div
-                    className={`rounded-2xl shadow-lg ${
-                      isInputUsed ? "p-3" : "p-6"
-                    }`}
+                    className={`rounded-2xl shadow-lg ${isInputUsed ? "p-3" : "p-6"
+                      }`}
                     style={{
                       background: "linear-gradient(135deg, #eff6ff, #dbeafe)",
                       border: "2px solid #dbeafe",
@@ -3361,11 +3082,9 @@ if (activeTabRef.current === requestTab) {
                             onChange={(e) => setPrompt(e.target.value)}
                             onKeyDown={handleKeyDown}
                             placeholder="Your Thoughts, Transformed into Insights."
-                            className={`w-full resize-none border-2 outline-none text-sm leading-5 rounded-lg ${
-                              isInputUsed ? "p-1.5 pr-12" : "p-2 pr-14"
-                            } focus:ring-2 transition-all duration-200 ${
-                              hasInterimResults ? "italic" : ""
-                            }`}
+                            className={`w-full resize-none border-2 outline-none text-sm leading-5 rounded-lg ${isInputUsed ? "p-1.5 pr-12" : "p-2 pr-14"
+                              } focus:ring-2 transition-all duration-200 ${hasInterimResults ? "italic" : ""
+                              }`}
                             style={{
                               minHeight: isInputUsed ? "48px" : "40px", // ↓ smaller than before
                               borderColor: hasInterimResults
@@ -3393,9 +3112,8 @@ if (activeTabRef.current === requestTab) {
                             }}
                           />
                           <div
-                            className={`absolute right-3 bottom-3 flex items-center gap-2 ${
-                              isInputUsed ? "" : ""
-                            }`}
+                            className={`absolute right-3 bottom-3 flex items-center gap-2 ${isInputUsed ? "" : ""
+                              }`}
                           >
                             <button
                               type="button"
@@ -3405,11 +3123,10 @@ if (activeTabRef.current === requestTab) {
                                   ? "Stop listening"
                                   : "Start speech recognition"
                               }
-                              className={`p-2.5 rounded-full transition-colors ${
-                                isListening
-                                  ? "bg-red-500 text-white"
-                                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                              }`}
+                              className={`p-2.5 rounded-full transition-colors ${isListening
+                                ? "bg-red-500 text-white"
+                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                }`}
                             >
                               <Mic className="w-4 h-4" />
                             </button>
@@ -3417,11 +3134,10 @@ if (activeTabRef.current === requestTab) {
                               type="submit"
                               disabled={isLoading || !prompt.trim()}
                               title="Generate"
-                              className={`p-2.5 rounded-full transition-colors flex items-center justify-center ${
-                                isLoading || !prompt.trim()
-                                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                  : "bg-green-600 text-white hover:bg-green-700"
-                              }`}
+                              className={`p-2.5 rounded-full transition-colors flex items-center justify-center ${isLoading || !prompt.trim()
+                                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                : "bg-green-600 text-white hover:bg-green-700"
+                                }`}
                               style={{ height: "40px", minWidth: "40px" }} // fixed height
                             >
                               {isLoading ? (
@@ -3440,11 +3156,10 @@ if (activeTabRef.current === requestTab) {
                           <div className="flex items-center gap-2 w-full">
                             <button
                               type="button"
-                              className={`w-7 h-7 flex items-center justify-center text-xs rounded border ${
-                                quickPage === 0
-                                  ? "opacity-40 cursor-not-allowed"
-                                  : "hover:bg-gray-50"
-                              }`}
+                              className={`w-7 h-7 flex items-center justify-center text-xs rounded border ${quickPage === 0
+                                ? "opacity-40 cursor-not-allowed"
+                                : "hover:bg-gray-50"
+                                }`}
                               onClick={(e) => {
                                 e.preventDefault();
                                 setQuickPage((p) => Math.max(0, p - 1));
@@ -3466,9 +3181,9 @@ if (activeTabRef.current === requestTab) {
                                     onClick={(e) => {
                                       e.preventDefault();
                                       const fakeEvent = {
-                                        preventDefault: () => {},
+                                        preventDefault: () => { },
                                       } as unknown as React.FormEvent;
-                                      handleSubmit(fakeEvent, "", q);
+                                      handleSubmit(fakeEvent, q);
                                     }}
                                     title={q}
                                   >
@@ -3477,7 +3192,7 @@ if (activeTabRef.current === requestTab) {
                                       style={{
                                         backgroundColor:
                                           quickQueryColors[
-                                            idx % quickQueryColors.length
+                                          idx % quickQueryColors.length
                                           ],
                                       }}
                                     />
@@ -3488,11 +3203,10 @@ if (activeTabRef.current === requestTab) {
                             </div>
                             <button
                               type="button"
-                              className={`w-7 h-7 flex items-center justify-center text-xs rounded border ${
-                                quickPage >= quickTotalPages - 1
-                                  ? "opacity-40 cursor-not-allowed"
-                                  : "hover:bg-gray-50"
-                              }`}
+                              className={`w-7 h-7 flex items-center justify-center text-xs rounded border ${quickPage >= quickTotalPages - 1
+                                ? "opacity-40 cursor-not-allowed"
+                                : "hover:bg-gray-50"
+                                }`}
                               onClick={(e) => {
                                 e.preventDefault();
                                 setQuickPage((p) =>
@@ -3758,10 +3472,10 @@ if (activeTabRef.current === requestTab) {
                           >
                             {result.response?.data?.user_input
                               ? result.response.data.user_input
-                                  .toLowerCase()
-                                  .replace(/\b\w/g, (char) =>
-                                    char.toUpperCase()
-                                  )
+                                .toLowerCase()
+                                .replace(/\b\w/g, (char) =>
+                                  char.toUpperCase()
+                                )
                               : "No Query Information Available"}
                           </p>
                         </div>
@@ -3823,8 +3537,8 @@ if (activeTabRef.current === requestTab) {
                                       </div> */}
                                           <div className="overflow-auto max-h-80">
                                             {Array.isArray(result.rawData) &&
-                                            result.rawData.length > 0 &&
-                                            typeof result.rawData[0] ===
+                                              result.rawData.length > 0 &&
+                                              typeof result.rawData[0] ===
                                               "object" ? (
                                               (() => {
                                                 const typedRows =
@@ -3887,13 +3601,13 @@ if (activeTabRef.current === requestTab) {
                                                                     key
                                                                   ] === "object"
                                                                     ? JSON.stringify(
-                                                                        row[key]
-                                                                      )
+                                                                      row[key]
+                                                                    )
                                                                     : String(
-                                                                        row[
-                                                                          key
-                                                                        ] ?? ""
-                                                                      )}
+                                                                      row[
+                                                                      key
+                                                                      ] ?? ""
+                                                                    )}
                                                                 </td>
                                                               )
                                                             )}
@@ -3961,17 +3675,17 @@ if (activeTabRef.current === requestTab) {
                                             const numericValues =
                                               finalYKey && rows.length > 0
                                                 ? rows
-                                                    .map((row) => {
-                                                      const value =
-                                                        row[
-                                                          finalYKey as keyof typeof row
-                                                        ];
-                                                      return typeof value ===
-                                                        "number"
-                                                        ? value
-                                                        : Number(value);
-                                                    })
-                                                    .filter((v) => !isNaN(v))
+                                                  .map((row) => {
+                                                    const value =
+                                                      row[
+                                                      finalYKey as keyof typeof row
+                                                      ];
+                                                    return typeof value ===
+                                                      "number"
+                                                      ? value
+                                                      : Number(value);
+                                                  })
+                                                  .filter((v) => !isNaN(v))
                                                 : [];
 
                                             // Calculate statistics
@@ -3986,9 +3700,9 @@ if (activeTabRef.current === requestTab) {
                                             const avgValue =
                                               numericValues.length > 0
                                                 ? numericValues.reduce(
-                                                    (a, b) => a + b,
-                                                    0
-                                                  ) / numericValues.length
+                                                  (a, b) => a + b,
+                                                  0
+                                                ) / numericValues.length
                                                 : null;
 
                                             return (
@@ -4014,11 +3728,10 @@ if (activeTabRef.current === requestTab) {
                                                       setStatResults(
                                                         (prev) => ({
                                                           ...prev,
-                                                          [result.resultId]: `Minimum Value: ${
-                                                            minValue !== null
-                                                              ? minValue
-                                                              : "N/A"
-                                                          }`,
+                                                          [result.resultId]: `Minimum Value: ${minValue !== null
+                                                            ? minValue
+                                                            : "N/A"
+                                                            }`,
                                                         })
                                                       )
                                                     }
@@ -4032,11 +3745,10 @@ if (activeTabRef.current === requestTab) {
                                                       setStatResults(
                                                         (prev) => ({
                                                           ...prev,
-                                                          [result.resultId]: `Maximum Value: ${
-                                                            maxValue !== null
-                                                              ? maxValue
-                                                              : "N/A"
-                                                          }`,
+                                                          [result.resultId]: `Maximum Value: ${maxValue !== null
+                                                            ? maxValue
+                                                            : "N/A"
+                                                            }`,
                                                         })
                                                       )
                                                     }
@@ -4050,13 +3762,12 @@ if (activeTabRef.current === requestTab) {
                                                       setStatResults(
                                                         (prev) => ({
                                                           ...prev,
-                                                          [result.resultId]: `Average Value: ${
-                                                            avgValue !== null
-                                                              ? avgValue.toFixed(
-                                                                  2
-                                                                )
-                                                              : "N/A"
-                                                          }`,
+                                                          [result.resultId]: `Average Value: ${avgValue !== null
+                                                            ? avgValue.toFixed(
+                                                              2
+                                                            )
+                                                            : "N/A"
+                                                            }`,
                                                         })
                                                       )
                                                     }
@@ -4071,7 +3782,7 @@ if (activeTabRef.current === requestTab) {
                                                   <div className="text-center text-sm font-medium text-gray-700 mt-1">
                                                     {
                                                       statResults[
-                                                        result.resultId
+                                                      result.resultId
                                                       ]
                                                     }
                                                   </div>
@@ -4120,7 +3831,7 @@ if (activeTabRef.current === requestTab) {
                                               result.rawData,
                                               result.chartTypes as {
                                                 [
-                                                  key: number
+                                                key: number
                                                 ]: ChartData["type"];
                                               },
                                               result.response,
@@ -4141,7 +3852,7 @@ if (activeTabRef.current === requestTab) {
                                               className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                                               value={
                                                 showTableInChat ===
-                                                result.resultId
+                                                  result.resultId
                                                   ? "table"
                                                   : currentType
                                               }
@@ -4404,7 +4115,7 @@ if (activeTabRef.current === requestTab) {
                                               result.rawData,
                                               result.chartTypes as {
                                                 [
-                                                  key: number
+                                                key: number
                                                 ]: ChartData["type"];
                                               },
                                               result.response,
@@ -4471,7 +4182,7 @@ if (activeTabRef.current === requestTab) {
                                                       1500
                                                     ); // hide tooltip after 1.5s
                                                   })
-                                                  .catch(() => {});
+                                                  .catch(() => { });
                                               }
                                             }}
                                           >
@@ -4668,110 +4379,7 @@ if (activeTabRef.current === requestTab) {
             </DialogActions>
           </Dialog>
         </main>
-        {/* Catalog Selection Modal (MUI) */}
-        <Dialog
-          open={showCatalogModal}
-          onClose={() => {
-            setShowCatalogModal(false);
-            setSelectedCatalog("");
-            setConflicts([]);
-            setPendingPrompt("");
-            setPrompt(pendingPrompt);
-          }}
-          maxWidth="xs"
-          fullWidth
-          PaperProps={{
-            sx: {
-              borderRadius: 2,
-              overflow: "hidden",
-            },
-          }}
-        >
-          <DialogTitle sx={{ textAlign: "center", pb: 1.5 }}>
-            <Box
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              gap={1}
-            >
-              <span style={{ fontSize: 18 }}>⚠️</span>
-              <Typography sx={{ fontWeight: 600, color: "#2c5aa0" }}>
-                Select Catalog
-              </Typography>
-            </Box>
-            <Typography variant="body2" sx={{ color: "text.secondary", mt: 1 }}>
-              Multiple catalogs found. Choose one:
-            </Typography>
-          </DialogTitle>
-          <Divider />
-          <DialogContent sx={{ pt: 2 }}>
-            <FormControl component="fieldset" fullWidth>
-              <RadioGroup
-                value={selectedCatalog}
-                onChange={(e) => setSelectedCatalog(e.target.value)}
-              >
-                {catalogOptions.map((catalog) => (
-                  <FormControlLabel
-                    key={catalog}
-                    value={catalog}
-                    control={
-                      <Radio
-                        sx={{
-                          color: "#2c5aa0",
-                          "&.Mui-checked": { color: "#2c5aa0" },
-                        }}
-                      />
-                    }
-                    label={
-                      <Typography
-                        sx={{ color: "#2c5aa0", fontWeight: 500, fontSize: 14 }}
-                      >
-                        {catalog
-                          .replace(/_/g, " ")
-                          .replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                      </Typography>
-                    }
-                    sx={{
-                      m: 0,
-                      p: 1,
-                      border: "1px solid",
-                      borderColor:
-                        selectedCatalog === catalog ? "#2c5aa0" : "#e5e7eb",
-                      borderRadius: 1.5,
-                      mb: 1,
-                      "&:hover": { backgroundColor: "rgba(59,130,246,0.04)" },
-                    }}
-                  />
-                ))}
-              </RadioGroup>
-            </FormControl>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2, pt: 0, gap: 1 }}>
-            <Button
-              variant="outlined"
-              onClick={() => {
-                setShowCatalogModal(false);
-                setSelectedCatalog("");
-                setConflicts([]);
-                setPendingPrompt("");
-                setPrompt(pendingPrompt);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="contained"
-              onClick={handleCatalogSelection}
-              disabled={!selectedCatalog}
-              sx={{
-                backgroundColor: "#2c5aa0",
-                "&:hover": { backgroundColor: "#244a86" },
-              }}
-            >
-              Continue
-            </Button>
-          </DialogActions>
-        </Dialog>
+
       </div>
     );
   }

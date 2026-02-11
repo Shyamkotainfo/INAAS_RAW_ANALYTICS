@@ -38,13 +38,18 @@ class QueryRequest(BaseModel):
 # Response Model
 # -------------------------------
 
-class QueryResponse(BaseModel):
+class QueryData(BaseModel):
     user_input: str
     pyspark: str | None
     results: dict | None
     insights: str | None
-    error: str | None = None
 
+
+class QueryResponse(BaseModel):
+    success: bool
+    data: QueryData | None
+    error: str | None
+    message: str
 
 # -------------------------------
 # Health Check

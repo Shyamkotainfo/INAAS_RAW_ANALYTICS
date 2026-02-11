@@ -47,10 +47,6 @@ import {
   DialogContent,
   DialogActions,
   Typography,
-  FormControl,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
   Divider,
 } from "@mui/material";
 
@@ -130,7 +126,6 @@ export default function CreateInsight() {
      Basic UI state (existing)
      ------------------------- */
   const [question, setQuestion] = useState("");
-  const [dbType, setDbType] = useState("");
   /* -------------------------
      Response state + additions
      ------------------------- */
@@ -152,13 +147,6 @@ export default function CreateInsight() {
   const [recognition, setRecognition] =
     useState<MinimalSpeechRecognition | null>(null);
   // const [hasInterimResults, setHasInterimResults] = useState(false);
-
-  // Catalog / modal / errors
-  const [showCatalogModal, setShowCatalogModal] = useState(false);
-  const [catalogOptions, setCatalogOptions] = useState<string[]>([]);
-  const [, setConflicts] = useState<string[]>([]);
-  const [selectedCatalog, setSelectedCatalog] = useState<string>("");
-  const [pendingPrompt, setPendingPrompt] = useState<string>("");
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -753,7 +741,6 @@ export default function CreateInsight() {
   }, []);
   const handleSubmit = async (
     e?: React.FormEvent,
-    preferredCatalog: string = "",
     overrideQuestion?: string,
   ) => {
     if (e && "preventDefault" in e) e.preventDefault();
@@ -772,26 +759,15 @@ export default function CreateInsight() {
     setIsLoading(true);
     // setIsInputUsed(true);
 
-    let openedCatalogModal = false;
     const requestTab = activeTabRef.current;
 
     try {
       const chatResponse = await apiService.sendChatPrompt(
         currentPrompt,
-        preferredCatalog,
         controller.signal,
-        requestTab,
-        dbType,
+        requestTab
       );
 
-      if (!chatResponse.success && chatResponse.catalog_options) {
-        setCatalogOptions(chatResponse.catalog_options);
-        setConflicts(chatResponse.conflicts || []);
-        setPendingPrompt(currentPrompt);
-        setShowCatalogModal(true);
-        openedCatalogModal = true;
-        return;
-      }
 
       if (!chatResponse.success) {
         const reason =
@@ -1006,7 +982,7 @@ export default function CreateInsight() {
       setErrorMessage("Failed to get response");
       setIsErrorOpen(true);
     } finally {
-      if (!openedCatalogModal) setIsLoading(false);
+      setIsLoading(false);
 
       if (abortControllerRef.current === controller) {
         // abortControllerRef.current.abort();
@@ -1015,136 +991,6 @@ export default function CreateInsight() {
     }
   };
 
-  /* ===================================================================
-     Handle catalog re-selection
-     =================================================================== */
-
-  const handleCatalogSelection = async () => {
-    if (!selectedCatalog || !pendingPrompt) return;
-    setShowCatalogModal(false);
-    setSelectedCatalog("");
-    setConflicts([]);
-
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    apiService.cancelRequest();
-    const requestTab = activeTabRef.current;
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setIsLoading(true);
-
-    try {
-      const chatResponse = await apiService.sendChatPrompt(
-        pendingPrompt,
-        selectedCatalog,
-        controller.signal,
-        requestTab,
-        dbType,
-      );
-
-      if (!chatResponse.success) {
-        const reason =
-          chatResponse.data?.reason ||
-          chatResponse.reason ||
-          chatResponse.error ||
-          "An error occurred while processing your request.";
-        setErrorMessage(reason);
-        setIsErrorOpen(true);
-        return;
-      }
-
-      const responseData = chatResponse.data ?? {};
-      const rawDataArray = Array.isArray(responseData.rawData)
-        ? normalizeResultsToObjects(responseData.rawData)
-        : undefined;
-      const resultsCandidate = normalizeResultsToObjects(
-        (responseData as { results?: unknown[] }).results,
-      );
-      const resultsArray = Array.isArray(resultsCandidate)
-        ? resultsCandidate
-        : undefined;
-      const hasRawData = !!rawDataArray && rawDataArray.length > 0;
-      const hasResultsData = !!resultsArray && resultsArray.length > 0;
-      const insightsValue =
-        typeof responseData.insights === "string"
-          ? responseData.insights.trim()
-          : "";
-      const hasInsights = insightsValue.length > 0;
-      const shouldCreateResultCard =
-        chatResponse.success && (hasRawData || hasResultsData || hasInsights);
-
-      if (shouldCreateResultCard) {
-        setErrorMessage("");
-        if (chatResponse.data?.chat_response) {
-          setDialogApiData({
-            user_input: chatResponse.data.user_input || "",
-            chat_response: chatResponse.data.chat_response || "",
-          });
-          setIsErrorOpen(true);
-        } else {
-          setIsErrorOpen(false);
-        }
-
-        const id = `result-${Date.now()}-${Math.random()
-          .toString(36)
-          .substr(2, 9)}`;
-        const newEntry: ResponseEntry = {
-          id,
-          rawData: hasRawData
-            ? (rawDataArray ?? [])
-            : hasResultsData
-              ? (resultsArray ?? [])
-              : [],
-          chartType: "bar",
-          reasoning: insightsValue || "",
-          sql: (responseData.sql as string) ?? "",
-          title: (responseData.user_input as string) ?? "Insight",
-          response: chatResponse,
-          createdAt: new Date().toLocaleString(),
-        };
-
-        setResponses((prev) => {
-          let updated = [newEntry, ...prev];
-          safeSave({
-            response: newEntry.response,
-            rawData: newEntry.rawData,
-            chartTypes: { 0: "bar" },
-            resultId: newEntry.id,
-          });
-          // .catch((error) => {
-          //   console.error("Error saving response:", error);
-          // });
-
-          if (updated.length > MAX_IN_MEMORY_RESPONSES) {
-            updated = manageResponseLimit(updated) as ResponseEntry[];
-          }
-          return updated;
-        });
-        setGlobalChartIndex((prev) => prev + 1);
-      } else if (chatResponse.success && chatResponse.data?.chat_response) {
-        setErrorMessage("");
-        setDialogApiData({
-          user_input: chatResponse.data.user_input || "",
-          chat_response: chatResponse.data.chat_response || "",
-        });
-        setIsErrorOpen(true);
-      }
-    } catch (error: unknown) {
-      if (error instanceof Error && error.message === "Request cancelled") {
-        return;
-      }
-      console.error("Error sending prompt:", error);
-      setErrorMessage("Failed to get response");
-      setIsErrorOpen(true);
-    } finally {
-      setIsLoading(false);
-      setPendingPrompt("");
-      if (abortControllerRef.current === controller)
-        abortControllerRef.current = null;
-    }
-  };
 
   /* ===================================================================
      Auto-scroll to bottom on responses/isLoading
@@ -1574,15 +1420,15 @@ export default function CreateInsight() {
               label:
                 axisSelections?.x && axisSelections?.y
                   ? axisSelections.y
-                      .replace(/_/g, " ")
-                      .replace(/\b\w/g, (l) => l.toUpperCase())
+                    .replace(/_/g, " ")
+                    .replace(/\b\w/g, (l) => l.toUpperCase())
                   : axisSelections?.x && !axisSelections?.y
                     ? labelKey
-                        .replace(/_/g, " ")
-                        .replace(/\b\w/g, (l) => l.toUpperCase())
+                      .replace(/_/g, " ")
+                      .replace(/\b\w/g, (l) => l.toUpperCase())
                     : valueKey
-                        .replace(/_/g, " ")
-                        .replace(/\b\w/g, (l) => l.toUpperCase()),
+                      .replace(/_/g, " ")
+                      .replace(/\b\w/g, (l) => l.toUpperCase()),
               data: chartData,
               backgroundColor: chartData.map(
                 (_, index) => `hsl(${(index * 137.5) % 360}, 70%, 60%)`,
@@ -1842,7 +1688,7 @@ export default function CreateInsight() {
           doc.setFont("helvetica", "normal");
           doc.setTextColor(0);
           cursorY += 20;
-        } catch {}
+        } catch { }
 
         const pageHeight: number = doc.internal.pageSize.getHeight();
         doc.setFontSize(12);
@@ -2021,9 +1867,8 @@ export default function CreateInsight() {
         }
       });
 
-      const filename = `selected-report-${
-        new Date().toISOString().split("T")[0]
-      }.pdf`;
+      const filename = `selected-report-${new Date().toISOString().split("T")[0]
+        }.pdf`;
       doc.save(filename);
       setIsGlobalDownloadOpen(false);
     } catch (err) {
@@ -2078,7 +1923,7 @@ export default function CreateInsight() {
           <Button
             variant="outline"
             size="sm"
-            // onClick={() => handleActionClick('Schedule')}
+          // onClick={() => handleActionClick('Schedule')}
           >
             <Calendar className="w-4 h-4 mr-2" />
             Schedule
@@ -2128,12 +1973,12 @@ export default function CreateInsight() {
                               onChange={(e) =>
                                 toggleSingleBulk(result.id, e.target.checked)
                               }
-                              // style={{ accentColor: "#2c5aa0" }}
+                            // style={{ accentColor: "#2c5aa0" }}
                             />
                             <div>
                               <p
                                 className="text-sm font-medium"
-                                // style={{ color: "#2c5aa0" }}
+                              // style={{ color: "#2c5aa0" }}
                               >
                                 {title}
                               </p>
@@ -2184,7 +2029,7 @@ export default function CreateInsight() {
                 variant="destructive"
                 size="sm"
                 onClick={handleClearAll}
-                // className="text-muted-foreground ml-2"
+              // className="text-muted-foreground ml-2"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Clear All
@@ -2201,111 +2046,90 @@ export default function CreateInsight() {
               <Sparkles className="w-5 h-5 text-primary" />
               <h2 className="font-semibold text-ml">Ask a question</h2>
             </div>
-            <div className="w-full my-1">
-              <select
-                value={dbType}
-                onChange={(e) => setDbType(e.target.value)}
-                className=" w-full rounded-2xl border px-4 py-2 text-sm outline-none
-    bg-background text-foreground border-border
-    focus:ring-2 focus:ring-primary focus:border-primary
-    transition-all
-    disabled:opacity-70 disabled:cursor-not-allowed"
-                disabled={dbType !== "" ? true : false}
-              >
-                <option value="" disabled>
-                  Selected database
-                </option>
-                <option value="databricks">Databricks</option>
-                <option value="postgres">Postgres</option>
-                <option value="bigquery">BigQuery</option>
-              </select>
-            </div>
-            {dbType !== "" && (
-              <div>
-                <div className="relative w-full border   rounded-2xl px-6 py-1">
-                  <div className="flex items-end">
-                    {/* Textarea */}
-                    <textarea
-                      ref={inputRef}
-                      value={question}
-                      onChange={(e) => setQuestion(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="Your Thoughts, Transformed into Insights."
-                      className="w-full min-h-[70px] resize-none outline-none border-none
+            <div>
+              <div className="relative w-full border   rounded-2xl px-6 py-1">
+                <div className="flex items-end">
+                  {/* Textarea */}
+                  <textarea
+                    ref={inputRef}
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Your Thoughts, Transformed into Insights."
+                    className="w-full min-h-[70px] resize-none outline-none border-none
            bg-transparent text-sm"
-                    />
+                  />
 
-                    {/* Icons (bottom aligned) */}
-                    <div className="flex items-end gap-3 pb-1 pl-3">
-                      {/* Mic Button */}
-                      <Button
-                        variant={"secondary"}
-                        onClick={handleSpeechRecognitionToggle}
-                        className="
+                  {/* Icons (bottom aligned) */}
+                  <div className="flex items-end gap-3 pb-1 pl-3">
+                    {/* Mic Button */}
+                    <Button
+                      variant={"secondary"}
+                      onClick={handleSpeechRecognitionToggle}
+                      className="
             w-10 h-10 rounded-full flex items-center justify-center
      hover:bg-gray-200 transition
           "
-                      >
-                        {isListening ? (
-                          <Mic className="w-5 h-5 text-red-500 animate-pulse" />
-                        ) : (
-                          <Mic className="w-5 h-5 text-primary" />
-                        )}
-                      </Button>
+                    >
+                      {isListening ? (
+                        <Mic className="w-5 h-5 text-red-500 animate-pulse" />
+                      ) : (
+                        <Mic className="w-5 h-5 text-primary" />
+                      )}
+                    </Button>
 
-                      {/* Send Button */}
-                      <Button
-                        variant={"secondary"}
-                        type="submit"
-                        disabled={isLoading || !question.trim()}
-                        className="
+                    {/* Send Button */}
+                    <Button
+                      variant={"secondary"}
+                      type="submit"
+                      disabled={isLoading || !question.trim()}
+                      className="
             w-10 h-10 rounded-full flex items-center justify-center
             transition   hover:bg-gray-200
             disabled:opacity-40 disabled:cursor-not-allowed
           "
-                      >
-                        {isLoading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          </>
-                        ) : (
-                          <>
-                            <SendHorizonal className="w-5 h-5 text-gray-700" />
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Queries Marquee */}
-                <div className="w-full overflow-hidden whitespace-nowrap rounded-lg bg-muted/30 mt-1">
-                  <div
-                    className="inline-block animate-marquee text-sm font-medium marquee-content"
-                    style={{ animation: "marquee 25s linear infinite" }}
-                  >
-                    {quickQueries.map((preset, i) => (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          // pendingAutoSubmit.current = true;
-
-                          setQuestion(preset);
-                          const fakeEvent = {
-                            preventDefault: () => {},
-                          } as unknown as React.FormEvent;
-                          handleSubmit(fakeEvent, "", preset);
-                          // // void  handleSubmit(preset);
-                        }}
-                        className="px-3 py-2 mx-1 rounded-lg bg-muted/40 hover:bg-primary/10 text-xs font-medium text-foreground border border-border hover:border-primary transition-all"
-                      >
-                        {preset}
-                      </button>
-                    ))}
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        </>
+                      ) : (
+                        <>
+                          <SendHorizonal className="w-5 h-5 text-gray-700" />
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </div>
               </div>
-            )}
+
+              {/* Quick Queries Marquee */}
+              <div className="w-full overflow-hidden whitespace-nowrap rounded-lg bg-muted/30 mt-1">
+                <div
+                  className="inline-block animate-marquee text-sm font-medium marquee-content"
+                  style={{ animation: "marquee 25s linear infinite" }}
+                >
+                  {quickQueries.map((preset, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        // pendingAutoSubmit.current = true;
+
+                        setQuestion(preset);
+                        const fakeEvent = {
+                          preventDefault: () => { },
+                        } as unknown as React.FormEvent;
+                        handleSubmit(fakeEvent, preset);
+                        // // void  handleSubmit(preset);
+                      }}
+                      className="px-3 py-2 mx-1 rounded-lg bg-muted/40 hover:bg-primary/10 text-xs font-medium text-foreground border border-border hover:border-primary transition-all"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </form>
 
@@ -2461,13 +2285,12 @@ export default function CreateInsight() {
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* Visualization */}
                         <div
-                          className={`glass-card rounded-xl p-6 ${
-                            Array.isArray(entry.rawData) &&
+                          className={`glass-card rounded-xl p-6 ${Array.isArray(entry.rawData) &&
                             entry.rawData.length > 0 &&
                             typeof entry.rawData[0] === "object"
-                              ? "h-[500px]"
-                              : ""
-                          }`}
+                            ? "h-[500px]"
+                            : ""
+                            }`}
                         >
                           <div className="flex items-center justify-between mb-4">
                             <h4 className="text-md font-semibold">
@@ -2511,75 +2334,75 @@ export default function CreateInsight() {
 
                           <div className="">
                             {entry.chartType === "table" &&
-                            Array.isArray(entry.rawData) &&
-                            entry.rawData.length > 0 &&
-                            typeof entry.rawData[0] === "object"
+                              Array.isArray(entry.rawData) &&
+                              entry.rawData.length > 0 &&
+                              typeof entry.rawData[0] === "object"
                               ? (() => {
-                                  const typedRows = entry.rawData as Array<
-                                    Record<string, unknown>
-                                  >;
-                                  const firstRow = typedRows[0] as Record<
-                                    string,
-                                    unknown
-                                  >;
-                                  const headers = Object.keys(firstRow);
-                                  const filteredHeaders: string[] = headers;
-                                  return (
-                                    <div className="overflow-auto max-h-[330px]">
-                                      <table className="w-full text-sm">
-                                        <thead className="bg-muted/40">
-                                          <tr>
+                                const typedRows = entry.rawData as Array<
+                                  Record<string, unknown>
+                                >;
+                                const firstRow = typedRows[0] as Record<
+                                  string,
+                                  unknown
+                                >;
+                                const headers = Object.keys(firstRow);
+                                const filteredHeaders: string[] = headers;
+                                return (
+                                  <div className="overflow-auto max-h-[330px]">
+                                    <table className="w-full text-sm">
+                                      <thead className="bg-muted/40">
+                                        <tr>
+                                          {filteredHeaders.map((key) => (
+                                            <th
+                                              key={key}
+                                              className="text-left font-semibold px-3 py-2 text-gray-600 tracking-wide border-l border-r border-gray-300"
+                                            >
+                                              {key
+                                                .replace(/_/g, " ") // replace underscores with spaces
+                                                .replace(/\b\w/g, (c) =>
+                                                  c.toUpperCase(),
+                                                )}{" "}
+                                              {/* capitalize each word */}
+                                            </th>
+                                          ))}
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {typedRows.map((row, idx) => (
+                                          <tr
+                                            className="border-t hover:bg-muted/20"
+                                            key={idx}
+                                          >
                                             {filteredHeaders.map((key) => (
-                                              <th
+                                              <td
                                                 key={key}
-                                                className="text-left font-semibold px-3 py-2 text-gray-600 tracking-wide border-l border-r border-gray-300"
+                                                className="px-3 py-2 text-muted-foreground"
                                               >
-                                                {key
-                                                  .replace(/_/g, " ") // replace underscores with spaces
-                                                  .replace(/\b\w/g, (c) =>
-                                                    c.toUpperCase(),
-                                                  )}{" "}
-                                                {/* capitalize each word */}
-                                              </th>
+                                                {typeof row[key] === "object"
+                                                  ? JSON.stringify(row[key])
+                                                  : String(row[key] ?? "")}
+                                              </td>
                                             ))}
                                           </tr>
-                                        </thead>
-                                        <tbody>
-                                          {typedRows.map((row, idx) => (
-                                            <tr
-                                              className="border-t hover:bg-muted/20"
-                                              key={idx}
-                                            >
-                                              {filteredHeaders.map((key) => (
-                                                <td
-                                                  key={key}
-                                                  className="px-3 py-2 text-muted-foreground"
-                                                >
-                                                  {typeof row[key] === "object"
-                                                    ? JSON.stringify(row[key])
-                                                    : String(row[key] ?? "")}
-                                                </td>
-                                              ))}
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  );
-                                })()
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                );
+                              })()
                               : Array.isArray(entry.rawData) &&
-                                  entry.rawData.length > 0 &&
-                                  typeof entry.rawData[0] === "object"
+                                entry.rawData.length > 0 &&
+                                typeof entry.rawData[0] === "object"
                                 ? charts?.map(
-                                    (
-                                      chartData: ChartData,
-                                      chartIndex: number,
-                                    ) => (
-                                      <>
-                                        <div key={`${entry.id}-${chartIndex}-${chartData.type}`}>
-                                          {visibleChartIdsRef.current.has(
-                                            entry.id,
-                                          ) && (
+                                  (
+                                    chartData: ChartData,
+                                    chartIndex: number,
+                                  ) => (
+                                    <>
+                                      <div key={`${entry.id}-${chartIndex}-${chartData.type}`}>
+                                        {visibleChartIdsRef.current.has(
+                                          entry.id,
+                                        ) && (
                                             <ChartRenderer
                                               chartData={{
                                                 ...chartData,
@@ -2588,189 +2411,189 @@ export default function CreateInsight() {
                                               }}
                                             />
                                           )}
-                                        </div>
-                                        {Array.isArray(entry.rawData) &&
-                                          entry.rawData.length > 0 &&
-                                          typeof entry.rawData[0] ===
-                                            "object" &&
-                                          (() => {
-                                            const typedRows =
-                                              entry.rawData as Array<
-                                                Record<string, unknown>
-                                              >;
-                                            const sampleRow =
-                                              typedRows[0] as Record<
-                                                string,
-                                                unknown
-                                              >;
-                                            const allKeys =
-                                              Object.keys(sampleRow);
-                                            const stringKeys = allKeys.filter(
-                                              (k) =>
-                                                typeof sampleRow[k] ===
-                                                "string",
-                                            );
-                                            const numericKeys = allKeys.filter(
-                                              (k) =>
-                                                typeof sampleRow[k] ===
-                                                "number",
-                                            );
-                                            const sel =
-                                              axisSelections[entry.id] || {};
-                                            // Generic, response-agnostic defaults:
-                                            // - X prefers time-like or first string; otherwise first available key
-                                            // - Y prefers metric-like or first numeric not equal to X; otherwise any other key
-                                            const timeLike = allKeys.filter(
-                                              (k) =>
-                                                /^(period|date|day|week|month|year|time)$/i.test(
-                                                  k,
-                                                ),
-                                            );
-                                            const metricLike = allKeys.filter(
-                                              (k) =>
-                                                /^(total_?unique_?viewers|value|count|total|amount|sum|metric|quantity|score)$/i.test(
-                                                  k,
-                                                ),
-                                            );
-                                            const defaultX =
-                                              timeLike[0] ||
-                                              stringKeys[0] ||
-                                              allKeys[0] ||
-                                              "";
-                                            const defaultYCandidateOrder = [
-                                              ...metricLike,
-                                              ...numericKeys.filter(
-                                                (k) => k !== defaultX,
+                                      </div>
+                                      {Array.isArray(entry.rawData) &&
+                                        entry.rawData.length > 0 &&
+                                        typeof entry.rawData[0] ===
+                                        "object" &&
+                                        (() => {
+                                          const typedRows =
+                                            entry.rawData as Array<
+                                              Record<string, unknown>
+                                            >;
+                                          const sampleRow =
+                                            typedRows[0] as Record<
+                                              string,
+                                              unknown
+                                            >;
+                                          const allKeys =
+                                            Object.keys(sampleRow);
+                                          const stringKeys = allKeys.filter(
+                                            (k) =>
+                                              typeof sampleRow[k] ===
+                                              "string",
+                                          );
+                                          const numericKeys = allKeys.filter(
+                                            (k) =>
+                                              typeof sampleRow[k] ===
+                                              "number",
+                                          );
+                                          const sel =
+                                            axisSelections[entry.id] || {};
+                                          // Generic, response-agnostic defaults:
+                                          // - X prefers time-like or first string; otherwise first available key
+                                          // - Y prefers metric-like or first numeric not equal to X; otherwise any other key
+                                          const timeLike = allKeys.filter(
+                                            (k) =>
+                                              /^(period|date|day|week|month|year|time)$/i.test(
+                                                k,
                                               ),
-                                              ...allKeys.filter(
-                                                (k) => k !== defaultX,
+                                          );
+                                          const metricLike = allKeys.filter(
+                                            (k) =>
+                                              /^(total_?unique_?viewers|value|count|total|amount|sum|metric|quantity|score)$/i.test(
+                                                k,
                                               ),
-                                            ];
-                                            const defaultY =
-                                              defaultYCandidateOrder[0] || "";
+                                          );
+                                          const defaultX =
+                                            timeLike[0] ||
+                                            stringKeys[0] ||
+                                            allKeys[0] ||
+                                            "";
+                                          const defaultYCandidateOrder = [
+                                            ...metricLike,
+                                            ...numericKeys.filter(
+                                              (k) => k !== defaultX,
+                                            ),
+                                            ...allKeys.filter(
+                                              (k) => k !== defaultX,
+                                            ),
+                                          ];
+                                          const defaultY =
+                                            defaultYCandidateOrder[0] || "";
 
-                                            // Filter out selected values from the other dropdown
-                                            const xAxisOptions = allKeys.filter(
-                                              (k) => k !== (sel.y || ""),
-                                            );
-                                            const yAxisOptions = allKeys.filter(
-                                              (k) => k !== (sel.x || ""),
-                                            );
+                                          // Filter out selected values from the other dropdown
+                                          const xAxisOptions = allKeys.filter(
+                                            (k) => k !== (sel.y || ""),
+                                          );
+                                          const yAxisOptions = allKeys.filter(
+                                            (k) => k !== (sel.x || ""),
+                                          );
 
-                                            return (
-                                              <>
-                                                {/* X Axis Dropdown */}
-                                                <div className="flex gap-5 py-4">
-                                                  <div className=" flex gap-3 ">
-                                                    <div>
-                                                      <label className="font-semibold text-sm ">
-                                                        X axis
-                                                      </label>
-                                                    </div>
-                                                    <div>
-                                                      <select
-                                                        className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                                        value={
-                                                          sel.x ?? defaultX
-                                                        }
-                                                        onChange={(e) =>
-                                                          setAxisSelections(
-                                                            (
-                                                              prev: Record<
-                                                                string,
-                                                                {
-                                                                  x?: string;
-                                                                  y?: string;
-                                                                }
-                                                              >,
-                                                            ) => ({
-                                                              ...prev,
-                                                              [entry.id]: {
-                                                                ...(prev[
-                                                                  entry.id
-                                                                ] || {}),
-                                                                x:
-                                                                  e.target
-                                                                    .value ||
-                                                                  undefined,
-                                                              },
-                                                            }),
-                                                          )
-                                                        }
-                                                      >
-                                                        {xAxisOptions.map(
-                                                          (k) => (
-                                                            <option
-                                                              key={k}
-                                                              value={k}
-                                                            >
-                                                              {k}
-                                                            </option>
-                                                          ),
-                                                        )}
-                                                      </select>
-                                                    </div>
+                                          return (
+                                            <>
+                                              {/* X Axis Dropdown */}
+                                              <div className="flex gap-5 py-4">
+                                                <div className=" flex gap-3 ">
+                                                  <div>
+                                                    <label className="font-semibold text-sm ">
+                                                      X axis
+                                                    </label>
                                                   </div>
-
-                                                  {/* Y Axis Dropdown */}
-                                                  <div className=" flex  gap-3">
-                                                    <div>
-                                                      {" "}
-                                                      <label className="font-semibold text-sm">
-                                                        Y axis
-                                                      </label>
-                                                    </div>
-                                                    <div>
-                                                      <select
-                                                        className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                                        value={
-                                                          sel.y ?? defaultY
-                                                        }
-                                                        onChange={(e) =>
-                                                          setAxisSelections(
-                                                            (
-                                                              prev: Record<
-                                                                string,
-                                                                {
-                                                                  x?: string;
-                                                                  y?: string;
-                                                                }
-                                                              >,
-                                                            ) => ({
-                                                              ...prev,
-                                                              [entry.id]: {
-                                                                ...(prev[
-                                                                  entry.id
-                                                                ] || {}),
-                                                                y:
-                                                                  e.target
-                                                                    .value ||
-                                                                  undefined,
-                                                              },
-                                                            }),
-                                                          )
-                                                        }
-                                                      >
-                                                        {yAxisOptions.map(
-                                                          (k) => (
-                                                            <option
-                                                              key={k}
-                                                              value={k}
-                                                            >
-                                                              {k}
-                                                            </option>
-                                                          ),
-                                                        )}
-                                                      </select>
-                                                    </div>
+                                                  <div>
+                                                    <select
+                                                      className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                                      value={
+                                                        sel.x ?? defaultX
+                                                      }
+                                                      onChange={(e) =>
+                                                        setAxisSelections(
+                                                          (
+                                                            prev: Record<
+                                                              string,
+                                                              {
+                                                                x?: string;
+                                                                y?: string;
+                                                              }
+                                                            >,
+                                                          ) => ({
+                                                            ...prev,
+                                                            [entry.id]: {
+                                                              ...(prev[
+                                                                entry.id
+                                                              ] || {}),
+                                                              x:
+                                                                e.target
+                                                                  .value ||
+                                                                undefined,
+                                                            },
+                                                          }),
+                                                        )
+                                                      }
+                                                    >
+                                                      {xAxisOptions.map(
+                                                        (k) => (
+                                                          <option
+                                                            key={k}
+                                                            value={k}
+                                                          >
+                                                            {k}
+                                                          </option>
+                                                        ),
+                                                      )}
+                                                    </select>
                                                   </div>
                                                 </div>
-                                              </>
-                                            );
-                                          })()}
-                                      </>
-                                    ),
-                                  )
+
+                                                {/* Y Axis Dropdown */}
+                                                <div className=" flex  gap-3">
+                                                  <div>
+                                                    {" "}
+                                                    <label className="font-semibold text-sm">
+                                                      Y axis
+                                                    </label>
+                                                  </div>
+                                                  <div>
+                                                    <select
+                                                      className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                                      value={
+                                                        sel.y ?? defaultY
+                                                      }
+                                                      onChange={(e) =>
+                                                        setAxisSelections(
+                                                          (
+                                                            prev: Record<
+                                                              string,
+                                                              {
+                                                                x?: string;
+                                                                y?: string;
+                                                              }
+                                                            >,
+                                                          ) => ({
+                                                            ...prev,
+                                                            [entry.id]: {
+                                                              ...(prev[
+                                                                entry.id
+                                                              ] || {}),
+                                                              y:
+                                                                e.target
+                                                                  .value ||
+                                                                undefined,
+                                                            },
+                                                          }),
+                                                        )
+                                                      }
+                                                    >
+                                                      {yAxisOptions.map(
+                                                        (k) => (
+                                                          <option
+                                                            key={k}
+                                                            value={k}
+                                                          >
+                                                            {k}
+                                                          </option>
+                                                        ),
+                                                      )}
+                                                    </select>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </>
+                                          );
+                                        })()}
+                                    </>
+                                  ),
+                                )
                                 : "No data available"}
                           </div>
                         </div>
@@ -2866,39 +2689,6 @@ export default function CreateInsight() {
           </div>
         )}
 
-        {/* Catalog modal — logic wired, UI uses existing Dialog component */}
-        <Dialog
-          open={showCatalogModal}
-          onClose={() => setShowCatalogModal(false)}
-        >
-          <DialogTitle>Choose Catalog</DialogTitle>
-          <DialogContent>
-            <FormControl component="fieldset">
-              <RadioGroup
-                value={selectedCatalog}
-                onChange={(e) => setSelectedCatalog(e.target.value)}
-              >
-                {catalogOptions.map((opt) => (
-                  <FormControlLabel
-                    key={opt}
-                    value={opt}
-                    control={<Radio />}
-                    label={opt}
-                  />
-                ))}
-              </RadioGroup>
-            </FormControl>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setShowCatalogModal(false)}>Cancel</Button>
-            <Button
-              onClick={handleCatalogSelection}
-              disabled={!selectedCatalog}
-            >
-              Select
-            </Button>
-          </DialogActions>
-        </Dialog>
 
         {/* Error/conversation dialog */}
         <Dialog open={isErrorOpen} onClose={() => setIsErrorOpen(false)}>
