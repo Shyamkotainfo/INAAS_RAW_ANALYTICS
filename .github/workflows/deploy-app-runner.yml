@@ -18,6 +18,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ---------------------------
+      # Checkout repository
+      # ---------------------------
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -41,29 +44,47 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       # ---------------------------
-      # Login to ECR
+      # Login to Amazon ECR
       # ---------------------------
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
       # ---------------------------
-      # Build Docker Image
+      # Set up Docker Buildx (IMPORTANT for amd64)
+      # ---------------------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ---------------------------
+      # Build Docker Image for AMD64
       # ---------------------------
       - name: Build Docker image
         run: |
-          docker build -t $ECR_REPO:$IMAGE_TAG ./Backend
+          docker buildx build \
+            --platform linux/amd64 \
+            -t $ECR_REPO:$IMAGE_TAG \
+            --load ./Backend
 
       # ---------------------------
-      # Tag Image
+      # Get AWS Account ID
+      # ---------------------------
+      - name: Get AWS account ID
+        id: aws-account
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
+
+      # ---------------------------
+      # Tag Image for ECR
       # ---------------------------
       - name: Tag image
         run: |
           docker tag $ECR_REPO:$IMAGE_TAG \
-          339713066436.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
+          $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
 
       # ---------------------------
-      # Push Image
+      # Push Image to ECR
       # ---------------------------
-      - name: Push image to ECR
+      - name: Push image
         run: |
-          docker push 339713066436.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
+          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
