@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Set JAVA_HOME
-ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-arm64
+ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 ENV PATH=$JAVA_HOME/bin:$PATH
 
 # Copy requirements first
@@ -23,6 +23,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend code
 COPY . .
 
-EXPOSE 8000
+EXPOSE 8080
 
-CMD ["python", "main.py", "--mode", "api", "--port", "8000"]
+CMD ["python", "main.py", "--mode", "api"]
