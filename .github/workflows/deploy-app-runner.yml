@@ -12,12 +12,14 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPO: inaas-raw
+  SERVICE_NAME: inaas-raw-dev
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
+
       # ---------------------------
       # Checkout repository
       # ---------------------------
@@ -44,47 +46,51 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       # ---------------------------
+      # Get AWS Account ID
+      # ---------------------------
+      - name: Get AWS account ID
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
+
+      # ---------------------------
       # Login to Amazon ECR
       # ---------------------------
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
       # ---------------------------
-      # Set up Docker Buildx (IMPORTANT for amd64)
+      # Set up Docker Buildx (AMD64 fix)
       # ---------------------------
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       # ---------------------------
-      # Build Docker Image for AMD64
+      # Build and Push Docker Image (AMD64)
       # ---------------------------
-      - name: Build Docker image
+      - name: Build and push Docker image
         run: |
+          IMAGE_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+          
           docker buildx build \
             --platform linux/amd64 \
-            -t $ECR_REPO:$IMAGE_TAG \
-            --load ./Backend
+            -t $IMAGE_URI \
+            --push ./Backend
 
       # ---------------------------
-      # Get AWS Account ID
+      # Trigger App Runner Deployment
       # ---------------------------
-      - name: Get AWS account ID
-        id: aws-account
+      - name: Deploy to App Runner
         run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          echo "ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
+          SERVICE_ARN=$(aws apprunner list-services \
+            --query "ServiceSummaryList[?ServiceName=='$SERVICE_NAME'].ServiceArn | [0]" \
+            --output text)
 
-      # ---------------------------
-      # Tag Image for ECR
-      # ---------------------------
-      - name: Tag image
-        run: |
-          docker tag $ECR_REPO:$IMAGE_TAG \
-          $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
-
-      # ---------------------------
-      # Push Image to ECR
-      # ---------------------------
-      - name: Push image
-        run: |
-          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
+          if [ "$SERVICE_ARN" != "None" ]; then
+            echo "Triggering deployment for $SERVICE_NAME"
+            aws apprunner start-deployment --service-arn $SERVICE_ARN
+          else
+            echo "App Runner service not found!"
+            exit 1
+          fi
