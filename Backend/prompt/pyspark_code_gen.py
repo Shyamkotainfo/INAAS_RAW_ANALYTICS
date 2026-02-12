@@ -64,6 +64,13 @@ For questions like "employee worked as manager in their career":
 
 
 ==============================
+STRICT AGGREGATION RULE: 
+==============================
+- Always use F.<function>() for all functions (e.g., F.count, F.max, F.min, F.avg, F.sum, F.countDistinct, F.col, F.upper, F.trim).  
+- Never use count(), max(), min(), avg(), sum(), countDistinct(), col(), upper(), trim() without the F. prefix.
+
+
+==============================
 ROLE / DESIGNATION MATCHING
 ==============================
 

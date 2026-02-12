@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IAAS - BI BOT Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="dashboard" id="dashboard">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo-section">
+                <img src="logo.svg" class="logo-image" />
+            </div>
+            <div class="welcome-center">
+                <h2>Welcome to IAAS - BI BOT</h2>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Single Page Layout -->
+            <div class="single-page-view">
+
+                <!-- Prompt Input Section -->
+                <div class="prompt-section">
+                    <div class="prompt-container">
+                        <h3>Enter your chart generation prompt:</h3>
+                        <div class="prompt-input-group">
+                            <textarea id="promptInput" placeholder="Describe the chart you want to generate... (e.g., 'Create a bar chart showing sales data for 2024 vs 2025')" rows="3"></textarea>
+                            <div class="prompt-buttons">
+                                <button id="generateChartsBtn" class="generate-btn">Generate Chart</button>
+                                <button id="speechBtn" class="speech-btn" title="Speech to Text">
+                                    <span class="mic-icon">🎤</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="sample-prompt">
+                            <strong>Sample prompt:</strong> "Create a bar chart showing average installations for 2024 vs 2025"
+                        </div>
+                        <div id="speechStatus" class="speech-status" style="display: none;">
+                            <span class="speech-indicator">🔴</span>
+                            <span class="speech-text">Listening...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Generated Charts Container -->
+                <div class="generated-charts-container" id="generatedChartsContainer" style="display: none;">
+                    <!-- Charts will be dynamically added here -->
+                    <div id="chartsList">
+                        <!-- Individual charts will be inserted here -->
+                    </div>
+                </div>
+
+
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
