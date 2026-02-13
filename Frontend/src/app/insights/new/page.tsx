@@ -63,10 +63,11 @@ interface ResponseEntry {
   rawData: unknown[];
   chartType: ChartType;
   reasoning: string;
-  sql: string;
+  sql?: string;
   title: string;
   response: ChatResponse;
   createdAt: string;
+  pyspark?: string;
 }
 type StoredResponsePayload = {
   response: ChatResponse;
@@ -355,7 +356,12 @@ export default function CreateInsight() {
             rawData: s.rawData as Record<string, unknown>[],
             chartType: "bar" as ChartType,
             reasoning: (s.response?.data?.insights as string) ?? "",
-            sql: (s.response?.data?.sql as string) ?? "",
+            ...(s.response?.data?.sql && {
+              sql: (s.response?.data?.sql as string) ?? "",
+            }),
+            ...(s.response?.data?.pyspark && {
+              pyspark: (s.response?.data?.pyspark as string) ?? "",
+            }),
             title: (s.response?.data?.user_input as string) ?? "Insight",
             response: s.response,
             createdAt: new Date().toLocaleString(),
@@ -693,7 +699,12 @@ export default function CreateInsight() {
           rawData: stored.rawData as Record<string, unknown>[],
           chartType: (stored.chartTypes?.[0] as ChartType) ?? "bar",
           reasoning: (stored.response?.data?.insights as string) ?? "",
-          sql: (stored.response?.data?.sql as string) ?? "",
+          ...(stored.response?.data?.sql && {
+            sql: (stored.response?.data?.sql as string) ?? "",
+          }),
+          ...(stored.response?.data?.pyspark && {
+            pyspark: (stored.response?.data?.pyspark as string) ?? "",
+          }),
           title: (stored.response?.data?.user_input as string) ?? "Insight",
           response: stored.response,
           createdAt: new Date().toLocaleString(),
@@ -765,9 +776,8 @@ export default function CreateInsight() {
       const chatResponse = await apiService.sendChatPrompt(
         currentPrompt,
         controller.signal,
-        requestTab
+        requestTab,
       );
-
 
       if (!chatResponse.success) {
         const reason =
@@ -838,7 +848,8 @@ export default function CreateInsight() {
                     : [],
                 chartType: "bar",
                 reasoning: insightsValue || "",
-                sql: (block.sql as string) ?? "",
+                ...(block.sql && { sql: block.sql }),
+                ...(block.pyspark && { pyspark: block.pyspark }),
                 title: (block.title as string) ?? "Insight",
                 response: chatResponse,
                 createdAt: new Date().toLocaleString(),
@@ -942,7 +953,8 @@ export default function CreateInsight() {
               : [],
           chartType: "bar",
           reasoning: insightsValue || "",
-          sql: (responseData.sql as string) ?? "",
+          ...(responseData.sql && { sql: responseData.sql }),
+          ...(responseData.pyspark && { pyspark: responseData.pyspark }),
           title: (responseData.user_input as string) ?? "Insight",
           response: chatResponse,
           createdAt: new Date().toLocaleString(),
@@ -990,7 +1002,6 @@ export default function CreateInsight() {
       }
     }
   };
-
 
   /* ===================================================================
      Auto-scroll to bottom on responses/isLoading
@@ -1051,18 +1062,31 @@ export default function CreateInsight() {
   const normalizeResultsToObjects = (
     results: unknown,
   ): Record<string, unknown>[] => {
+    console.log("", results, "resultsresults");
     if (!Array.isArray(results) || results.length < 2) return [];
     const headers = results[0];
     const rows = results[1];
 
     if (!Array.isArray(headers) || !Array.isArray(rows)) return [];
+    console.log(
+      "",
+      results,
+      rows.map((row: unknown[]) => {
+        const obj: Record<string, unknown> = {};
+        headers.forEach((key: string, index: number) => {
+          obj[key] = row[index];
+        });
+        return obj;
+      }),
+      "resultsresults",
+    );
 
     return rows.map((row: unknown[]) => {
       const obj: Record<string, unknown> = {};
       headers.forEach((key: string, index: number) => {
         obj[key] = row[index];
       });
-
+      console.log(obj, "resultsresults");
       return obj;
     });
   };
@@ -1084,12 +1108,16 @@ export default function CreateInsight() {
     axisSelections?: { x?: string; y?: string },
   ): ChartData[] => {
     if (!rawData.length) return [];
+    console.log(rawData, "rawDatarawData resultsresults");
     // ✅ FIX: single row aggregate (COUNT, SUM, etc.)
     if (rawData.length === 1) {
       const row = rawData[0] as Record<string, unknown>;
+      console.log(row, "rawDatarawData resultsresults");
+
       const numericKey = Object.keys(row).find(
-        (k) => typeof row[k] === "number",
+        (k) => typeof row[k] === "number" || (!isNaN(Number(row[k])) && row[k] !== null),
       );
+      console.log(numericKey, "rawDatarawData resultsresults");
 
       if (numericKey) {
         return [
@@ -1134,7 +1162,7 @@ export default function CreateInsight() {
 
     // Find numeric and string keys
     const numericKeys = keys.filter(
-      (key) => typeof sampleItem[key] === "number",
+      (key) => typeof sampleItem[key] === "number" || (!isNaN(Number(sampleItem[key])) && sampleItem[key] !== null),
     );
     const stringKeys = keys.filter(
       (key) => typeof sampleItem[key] === "string",
@@ -1420,15 +1448,15 @@ export default function CreateInsight() {
               label:
                 axisSelections?.x && axisSelections?.y
                   ? axisSelections.y
-                    .replace(/_/g, " ")
-                    .replace(/\b\w/g, (l) => l.toUpperCase())
-                  : axisSelections?.x && !axisSelections?.y
-                    ? labelKey
                       .replace(/_/g, " ")
                       .replace(/\b\w/g, (l) => l.toUpperCase())
+                  : axisSelections?.x && !axisSelections?.y
+                    ? labelKey
+                        .replace(/_/g, " ")
+                        .replace(/\b\w/g, (l) => l.toUpperCase())
                     : valueKey
-                      .replace(/_/g, " ")
-                      .replace(/\b\w/g, (l) => l.toUpperCase()),
+                        .replace(/_/g, " ")
+                        .replace(/\b\w/g, (l) => l.toUpperCase()),
               data: chartData,
               backgroundColor: chartData.map(
                 (_, index) => `hsl(${(index * 137.5) % 360}, 70%, 60%)`,
@@ -1688,7 +1716,7 @@ export default function CreateInsight() {
           doc.setFont("helvetica", "normal");
           doc.setTextColor(0);
           cursorY += 20;
-        } catch { }
+        } catch {}
 
         const pageHeight: number = doc.internal.pageSize.getHeight();
         doc.setFontSize(12);
@@ -1867,8 +1895,9 @@ export default function CreateInsight() {
         }
       });
 
-      const filename = `selected-report-${new Date().toISOString().split("T")[0]
-        }.pdf`;
+      const filename = `selected-report-${
+        new Date().toISOString().split("T")[0]
+      }.pdf`;
       doc.save(filename);
       setIsGlobalDownloadOpen(false);
     } catch (err) {
@@ -1923,7 +1952,7 @@ export default function CreateInsight() {
           <Button
             variant="outline"
             size="sm"
-          // onClick={() => handleActionClick('Schedule')}
+            // onClick={() => handleActionClick('Schedule')}
           >
             <Calendar className="w-4 h-4 mr-2" />
             Schedule
@@ -1973,12 +2002,12 @@ export default function CreateInsight() {
                               onChange={(e) =>
                                 toggleSingleBulk(result.id, e.target.checked)
                               }
-                            // style={{ accentColor: "#2c5aa0" }}
+                              // style={{ accentColor: "#2c5aa0" }}
                             />
                             <div>
                               <p
                                 className="text-sm font-medium"
-                              // style={{ color: "#2c5aa0" }}
+                                // style={{ color: "#2c5aa0" }}
                               >
                                 {title}
                               </p>
@@ -2029,7 +2058,7 @@ export default function CreateInsight() {
                 variant="destructive"
                 size="sm"
                 onClick={handleClearAll}
-              // className="text-muted-foreground ml-2"
+                // className="text-muted-foreground ml-2"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Clear All
@@ -2104,31 +2133,6 @@ export default function CreateInsight() {
               </div>
 
               {/* Quick Queries Marquee */}
-              <div className="w-full overflow-hidden whitespace-nowrap rounded-lg bg-muted/30 mt-1">
-                <div
-                  className="inline-block animate-marquee text-sm font-medium marquee-content"
-                  style={{ animation: "marquee 25s linear infinite" }}
-                >
-                  {quickQueries.map((preset, i) => (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        // pendingAutoSubmit.current = true;
-
-                        setQuestion(preset);
-                        const fakeEvent = {
-                          preventDefault: () => { },
-                        } as unknown as React.FormEvent;
-                        handleSubmit(fakeEvent, preset);
-                        // // void  handleSubmit(preset);
-                      }}
-                      className="px-3 py-2 mx-1 rounded-lg bg-muted/40 hover:bg-primary/10 text-xs font-medium text-foreground border border-border hover:border-primary transition-all"
-                    >
-                      {preset}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         </form>
@@ -2172,6 +2176,14 @@ export default function CreateInsight() {
                       idx,
                       axisSelections[entry.id],
                     );
+                  console.log(
+                    "Rendering entry",
+                    entry.id,
+                    entry.rawData,
+                    "with charts",
+                    charts,
+                    "resultsresults",
+                  );
 
                   return (
                     <div
@@ -2285,12 +2297,13 @@ export default function CreateInsight() {
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* Visualization */}
                         <div
-                          className={`glass-card rounded-xl p-6 ${Array.isArray(entry.rawData) &&
+                          className={`glass-card rounded-xl p-6 ${
+                            Array.isArray(entry.rawData) &&
                             entry.rawData.length > 0 &&
                             typeof entry.rawData[0] === "object"
-                            ? "h-[500px]"
-                            : ""
-                            }`}
+                              ? "h-[500px]"
+                              : ""
+                          }`}
                         >
                           <div className="flex items-center justify-between mb-4">
                             <h4 className="text-md font-semibold">
@@ -2334,75 +2347,77 @@ export default function CreateInsight() {
 
                           <div className="">
                             {entry.chartType === "table" &&
-                              Array.isArray(entry.rawData) &&
-                              entry.rawData.length > 0 &&
-                              typeof entry.rawData[0] === "object"
+                            Array.isArray(entry.rawData) &&
+                            entry.rawData.length > 0 &&
+                            typeof entry.rawData[0] === "object"
                               ? (() => {
-                                const typedRows = entry.rawData as Array<
-                                  Record<string, unknown>
-                                >;
-                                const firstRow = typedRows[0] as Record<
-                                  string,
-                                  unknown
-                                >;
-                                const headers = Object.keys(firstRow);
-                                const filteredHeaders: string[] = headers;
-                                return (
-                                  <div className="overflow-auto max-h-[330px]">
-                                    <table className="w-full text-sm">
-                                      <thead className="bg-muted/40">
-                                        <tr>
-                                          {filteredHeaders.map((key) => (
-                                            <th
-                                              key={key}
-                                              className="text-left font-semibold px-3 py-2 text-gray-600 tracking-wide border-l border-r border-gray-300"
-                                            >
-                                              {key
-                                                .replace(/_/g, " ") // replace underscores with spaces
-                                                .replace(/\b\w/g, (c) =>
-                                                  c.toUpperCase(),
-                                                )}{" "}
-                                              {/* capitalize each word */}
-                                            </th>
-                                          ))}
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {typedRows.map((row, idx) => (
-                                          <tr
-                                            className="border-t hover:bg-muted/20"
-                                            key={idx}
-                                          >
+                                  const typedRows = entry.rawData as Array<
+                                    Record<string, unknown>
+                                  >;
+                                  const firstRow = typedRows[0] as Record<
+                                    string,
+                                    unknown
+                                  >;
+                                  const headers = Object.keys(firstRow);
+                                  const filteredHeaders: string[] = headers;
+                                  return (
+                                    <div className="overflow-auto max-h-[330px]">
+                                      <table className="w-full text-sm">
+                                        <thead className="bg-muted/40">
+                                          <tr>
                                             {filteredHeaders.map((key) => (
-                                              <td
+                                              <th
                                                 key={key}
-                                                className="px-3 py-2 text-muted-foreground"
+                                                className="text-left font-semibold px-3 py-2 text-gray-600 tracking-wide border-l border-r border-gray-300"
                                               >
-                                                {typeof row[key] === "object"
-                                                  ? JSON.stringify(row[key])
-                                                  : String(row[key] ?? "")}
-                                              </td>
+                                                {key
+                                                  .replace(/_/g, " ") // replace underscores with spaces
+                                                  .replace(/\b\w/g, (c) =>
+                                                    c.toUpperCase(),
+                                                  )}{" "}
+                                                {/* capitalize each word */}
+                                              </th>
                                             ))}
                                           </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                );
-                              })()
+                                        </thead>
+                                        <tbody>
+                                          {typedRows.map((row, idx) => (
+                                            <tr
+                                              className="border-t hover:bg-muted/20"
+                                              key={idx}
+                                            >
+                                              {filteredHeaders.map((key) => (
+                                                <td
+                                                  key={key}
+                                                  className="px-3 py-2 text-muted-foreground"
+                                                >
+                                                  {typeof row[key] === "object"
+                                                    ? JSON.stringify(row[key])
+                                                    : String(row[key] ?? "")}
+                                                </td>
+                                              ))}
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  );
+                                })()
                               : Array.isArray(entry.rawData) &&
-                                entry.rawData.length > 0 &&
-                                typeof entry.rawData[0] === "object"
+                                  entry.rawData.length > 0 &&
+                                  typeof entry.rawData[0] === "object"
                                 ? charts?.map(
-                                  (
-                                    chartData: ChartData,
-                                    chartIndex: number,
-                                  ) => (
-                                    <>
-                                      <div key={`${entry.id}-${chartIndex}-${chartData.type}`}>
-                                        {visibleChartIdsRef.current.has(
-                                          entry.id,
-                                        ) && (
+                                    (
+                                      chartData: ChartData,
+                                      chartIndex: number,
+                                    ) => (
+                                      <>
+                                        <div
+                                          key={`${entry.id}-${chartIndex}-${chartData.type}`}
+                                        >
+                                          {visibleChartIdsRef.current.has(
+                                            entry.id,
+                                          ) && (
                                             <ChartRenderer
                                               chartData={{
                                                 ...chartData,
@@ -2411,189 +2426,189 @@ export default function CreateInsight() {
                                               }}
                                             />
                                           )}
-                                      </div>
-                                      {Array.isArray(entry.rawData) &&
-                                        entry.rawData.length > 0 &&
-                                        typeof entry.rawData[0] ===
-                                        "object" &&
-                                        (() => {
-                                          const typedRows =
-                                            entry.rawData as Array<
-                                              Record<string, unknown>
-                                            >;
-                                          const sampleRow =
-                                            typedRows[0] as Record<
-                                              string,
-                                              unknown
-                                            >;
-                                          const allKeys =
-                                            Object.keys(sampleRow);
-                                          const stringKeys = allKeys.filter(
-                                            (k) =>
-                                              typeof sampleRow[k] ===
-                                              "string",
-                                          );
-                                          const numericKeys = allKeys.filter(
-                                            (k) =>
-                                              typeof sampleRow[k] ===
-                                              "number",
-                                          );
-                                          const sel =
-                                            axisSelections[entry.id] || {};
-                                          // Generic, response-agnostic defaults:
-                                          // - X prefers time-like or first string; otherwise first available key
-                                          // - Y prefers metric-like or first numeric not equal to X; otherwise any other key
-                                          const timeLike = allKeys.filter(
-                                            (k) =>
-                                              /^(period|date|day|week|month|year|time)$/i.test(
-                                                k,
+                                        </div>
+                                        {Array.isArray(entry.rawData) &&
+                                          entry.rawData.length > 0 &&
+                                          typeof entry.rawData[0] ===
+                                            "object" &&
+                                          (() => {
+                                            const typedRows =
+                                              entry.rawData as Array<
+                                                Record<string, unknown>
+                                              >;
+                                            const sampleRow =
+                                              typedRows[0] as Record<
+                                                string,
+                                                unknown
+                                              >;
+                                            const allKeys =
+                                              Object.keys(sampleRow);
+                                            const stringKeys = allKeys.filter(
+                                              (k) =>
+                                                typeof sampleRow[k] ===
+                                                "string",
+                                            );
+                                            const numericKeys = allKeys.filter(
+                                              (k) =>
+                                                typeof sampleRow[k] ===
+                                                "number",
+                                            );
+                                            const sel =
+                                              axisSelections[entry.id] || {};
+                                            // Generic, response-agnostic defaults:
+                                            // - X prefers time-like or first string; otherwise first available key
+                                            // - Y prefers metric-like or first numeric not equal to X; otherwise any other key
+                                            const timeLike = allKeys.filter(
+                                              (k) =>
+                                                /^(period|date|day|week|month|year|time)$/i.test(
+                                                  k,
+                                                ),
+                                            );
+                                            const metricLike = allKeys.filter(
+                                              (k) =>
+                                                /^(total_?unique_?viewers|value|count|total|amount|sum|metric|quantity|score)$/i.test(
+                                                  k,
+                                                ),
+                                            );
+                                            const defaultX =
+                                              timeLike[0] ||
+                                              stringKeys[0] ||
+                                              allKeys[0] ||
+                                              "";
+                                            const defaultYCandidateOrder = [
+                                              ...metricLike,
+                                              ...numericKeys.filter(
+                                                (k) => k !== defaultX,
                                               ),
-                                          );
-                                          const metricLike = allKeys.filter(
-                                            (k) =>
-                                              /^(total_?unique_?viewers|value|count|total|amount|sum|metric|quantity|score)$/i.test(
-                                                k,
+                                              ...allKeys.filter(
+                                                (k) => k !== defaultX,
                                               ),
-                                          );
-                                          const defaultX =
-                                            timeLike[0] ||
-                                            stringKeys[0] ||
-                                            allKeys[0] ||
-                                            "";
-                                          const defaultYCandidateOrder = [
-                                            ...metricLike,
-                                            ...numericKeys.filter(
-                                              (k) => k !== defaultX,
-                                            ),
-                                            ...allKeys.filter(
-                                              (k) => k !== defaultX,
-                                            ),
-                                          ];
-                                          const defaultY =
-                                            defaultYCandidateOrder[0] || "";
+                                            ];
+                                            const defaultY =
+                                              defaultYCandidateOrder[0] || "";
 
-                                          // Filter out selected values from the other dropdown
-                                          const xAxisOptions = allKeys.filter(
-                                            (k) => k !== (sel.y || ""),
-                                          );
-                                          const yAxisOptions = allKeys.filter(
-                                            (k) => k !== (sel.x || ""),
-                                          );
+                                            // Filter out selected values from the other dropdown
+                                            const xAxisOptions = allKeys.filter(
+                                              (k) => k !== (sel.y || ""),
+                                            );
+                                            const yAxisOptions = allKeys.filter(
+                                              (k) => k !== (sel.x || ""),
+                                            );
 
-                                          return (
-                                            <>
-                                              {/* X Axis Dropdown */}
-                                              <div className="flex gap-5 py-4">
-                                                <div className=" flex gap-3 ">
-                                                  <div>
-                                                    <label className="font-semibold text-sm ">
-                                                      X axis
-                                                    </label>
+                                            return (
+                                              <>
+                                                {/* X Axis Dropdown */}
+                                                <div className="flex gap-5 py-4">
+                                                  <div className=" flex gap-3 ">
+                                                    <div>
+                                                      <label className="font-semibold text-sm ">
+                                                        X axis
+                                                      </label>
+                                                    </div>
+                                                    <div>
+                                                      <select
+                                                        className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                                        value={
+                                                          sel.x ?? defaultX
+                                                        }
+                                                        onChange={(e) =>
+                                                          setAxisSelections(
+                                                            (
+                                                              prev: Record<
+                                                                string,
+                                                                {
+                                                                  x?: string;
+                                                                  y?: string;
+                                                                }
+                                                              >,
+                                                            ) => ({
+                                                              ...prev,
+                                                              [entry.id]: {
+                                                                ...(prev[
+                                                                  entry.id
+                                                                ] || {}),
+                                                                x:
+                                                                  e.target
+                                                                    .value ||
+                                                                  undefined,
+                                                              },
+                                                            }),
+                                                          )
+                                                        }
+                                                      >
+                                                        {xAxisOptions.map(
+                                                          (k) => (
+                                                            <option
+                                                              key={k}
+                                                              value={k}
+                                                            >
+                                                              {k}
+                                                            </option>
+                                                          ),
+                                                        )}
+                                                      </select>
+                                                    </div>
                                                   </div>
-                                                  <div>
-                                                    <select
-                                                      className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                                      value={
-                                                        sel.x ?? defaultX
-                                                      }
-                                                      onChange={(e) =>
-                                                        setAxisSelections(
-                                                          (
-                                                            prev: Record<
-                                                              string,
-                                                              {
-                                                                x?: string;
-                                                                y?: string;
-                                                              }
-                                                            >,
-                                                          ) => ({
-                                                            ...prev,
-                                                            [entry.id]: {
-                                                              ...(prev[
-                                                                entry.id
-                                                              ] || {}),
-                                                              x:
-                                                                e.target
-                                                                  .value ||
-                                                                undefined,
-                                                            },
-                                                          }),
-                                                        )
-                                                      }
-                                                    >
-                                                      {xAxisOptions.map(
-                                                        (k) => (
-                                                          <option
-                                                            key={k}
-                                                            value={k}
-                                                          >
-                                                            {k}
-                                                          </option>
-                                                        ),
-                                                      )}
-                                                    </select>
+
+                                                  {/* Y Axis Dropdown */}
+                                                  <div className=" flex  gap-3">
+                                                    <div>
+                                                      {" "}
+                                                      <label className="font-semibold text-sm">
+                                                        Y axis
+                                                      </label>
+                                                    </div>
+                                                    <div>
+                                                      <select
+                                                        className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                                        value={
+                                                          sel.y ?? defaultY
+                                                        }
+                                                        onChange={(e) =>
+                                                          setAxisSelections(
+                                                            (
+                                                              prev: Record<
+                                                                string,
+                                                                {
+                                                                  x?: string;
+                                                                  y?: string;
+                                                                }
+                                                              >,
+                                                            ) => ({
+                                                              ...prev,
+                                                              [entry.id]: {
+                                                                ...(prev[
+                                                                  entry.id
+                                                                ] || {}),
+                                                                y:
+                                                                  e.target
+                                                                    .value ||
+                                                                  undefined,
+                                                              },
+                                                            }),
+                                                          )
+                                                        }
+                                                      >
+                                                        {yAxisOptions.map(
+                                                          (k) => (
+                                                            <option
+                                                              key={k}
+                                                              value={k}
+                                                            >
+                                                              {k}
+                                                            </option>
+                                                          ),
+                                                        )}
+                                                      </select>
+                                                    </div>
                                                   </div>
                                                 </div>
-
-                                                {/* Y Axis Dropdown */}
-                                                <div className=" flex  gap-3">
-                                                  <div>
-                                                    {" "}
-                                                    <label className="font-semibold text-sm">
-                                                      Y axis
-                                                    </label>
-                                                  </div>
-                                                  <div>
-                                                    <select
-                                                      className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                                      value={
-                                                        sel.y ?? defaultY
-                                                      }
-                                                      onChange={(e) =>
-                                                        setAxisSelections(
-                                                          (
-                                                            prev: Record<
-                                                              string,
-                                                              {
-                                                                x?: string;
-                                                                y?: string;
-                                                              }
-                                                            >,
-                                                          ) => ({
-                                                            ...prev,
-                                                            [entry.id]: {
-                                                              ...(prev[
-                                                                entry.id
-                                                              ] || {}),
-                                                              y:
-                                                                e.target
-                                                                  .value ||
-                                                                undefined,
-                                                            },
-                                                          }),
-                                                        )
-                                                      }
-                                                    >
-                                                      {yAxisOptions.map(
-                                                        (k) => (
-                                                          <option
-                                                            key={k}
-                                                            value={k}
-                                                          >
-                                                            {k}
-                                                          </option>
-                                                        ),
-                                                      )}
-                                                    </select>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            </>
-                                          );
-                                        })()}
-                                    </>
-                                  ),
-                                )
+                                              </>
+                                            );
+                                          })()}
+                                      </>
+                                    ),
+                                  )
                                 : "No data available"}
                           </div>
                         </div>
@@ -2606,8 +2621,13 @@ export default function CreateInsight() {
                                 <TabsTrigger value="reasoning">
                                   AI Reasoning
                                 </TabsTrigger>
-                                <TabsTrigger value="sql">
-                                  Generated SQL
+                                {entry.sql && (
+                                  <TabsTrigger value="sql">
+                                    Generated SQL
+                                  </TabsTrigger>
+                                )}
+                                <TabsTrigger value="pyspark">
+                                  Generated PYS Park
                                 </TabsTrigger>
                               </TabsList>
                             </div>
@@ -2627,6 +2647,13 @@ export default function CreateInsight() {
                               <Textarea
                                 readOnly
                                 value={entry.sql}
+                                className="font-mono text-xs min-h-[200px]"
+                              />
+                            </TabsContent>
+                            <TabsContent value="pyspark">
+                              <Textarea
+                                readOnly
+                                value={entry.pyspark}
                                 className="font-mono text-xs min-h-[200px]"
                               />
                             </TabsContent>
@@ -2688,7 +2715,6 @@ export default function CreateInsight() {
             </Button>
           </div>
         )}
-
 
         {/* Error/conversation dialog */}
         <Dialog open={isErrorOpen} onClose={() => setIsErrorOpen(false)}>

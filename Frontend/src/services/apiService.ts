@@ -11,7 +11,7 @@ class ApiService {
   async sendChatPrompt(
     prompt: string,
     signal?: AbortSignal,
-    id: string = ""
+    id: string = "",
   ): Promise<ChatResponse> {
     // Cancel previous request if it exists
     console.log(this.abortController, signal);
@@ -39,7 +39,7 @@ class ApiService {
             user_input: prompt,
           }),
           signal: controller.signal,
-        }
+        },
       );
 
       // Try to parse JSON regardless of status to capture error bodies with reason/message
@@ -53,7 +53,74 @@ class ApiService {
       }
       const isObject = (v: unknown): v is Record<string, unknown> =>
         typeof v === "object" && v !== null;
+      if (response.ok && isObject(data) && isObject(data.data)) {
+        const d = data.data as Record<string, unknown>;
+        console.log(
+          d,
+          "results" in d,
+          typeof d.results === "object",
+          !Array.isArray(d.results),
+          d.results !== null,
+          "rawData",
+        );
+        let formattedResults: unknown[] = [];
+        if (
+          typeof d.results === "object" &&
+          !Array.isArray(d.results) &&
+          d.results !== null &&
+          "columns" in d.results &&
+          "rows" in d.results
+        ) {
+          const { columns, rows } = d.results as {
+            columns?: unknown[];
+            rows?: unknown[][];
+          };
 
+          if (Array.isArray(columns) && Array.isArray(rows)) {
+            formattedResults = [columns, rows];
+          }
+        }
+        console.log(
+          formattedResults,
+          "results" in d,
+          typeof d.results === "object",
+          !Array.isArray(d.results),
+          d.results !== null,
+          "columns" in (d.results as Record<string, unknown>),
+          "rows" in (d.results as Record<string, unknown>),
+          "rawData",
+        );
+        if (
+          "results" in d &&
+          typeof d.results === "object" &&
+          !Array.isArray(d.results) &&
+          d.results !== null &&
+          "columns" in (d.results as Record<string, unknown>) &&
+          "rows" in (d.results as Record<string, unknown>)
+        ) {
+          console.log(formattedResults, "rawData");
+          return {
+            success: true,
+            data: {
+              rawData: formattedResults,
+              results: formattedResults,
+              message:
+                typeof d.message === "string"
+                  ? d.message
+                  : "Data retrieved successfully",
+              insights: typeof d.insights === "string" ? d.insights : undefined,
+              user_input:
+                typeof d.user_input === "string" ? d.user_input : undefined,
+              chat_response:
+                typeof d.chat_response === "string"
+                  ? d.chat_response
+                  : undefined,
+              pyspark: typeof d.pyspark === "string" ? d.pyspark : undefined,
+              tab_id: id,
+            },
+          };
+        }
+      }
       // Success cases
       if (response.ok && isObject(data)) {
         const d = data as Record<string, unknown>;
@@ -232,8 +299,8 @@ class ApiService {
           const rawData =
             columns.length > 0 && rawRows.length > 0
               ? rawRows.map((row) =>
-                Object.fromEntries(columns.map((c, i) => [c, row[i]]))
-              )
+                  Object.fromEntries(columns.map((c, i) => [c, row[i]])),
+                )
               : [];
 
           metrics[key] = {
