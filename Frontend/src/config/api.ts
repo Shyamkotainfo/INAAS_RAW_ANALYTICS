@@ -22,6 +22,7 @@ export interface MetricBlock {
   chat_response?: string;
   reason?: string;
   tab_id?: string;
+  pyspark?: string;
 }
 
 // API Response Types
@@ -37,6 +38,7 @@ export interface ChatResponse {
     chat_response?: string; // Assistant/chat reply from API
     reason?: string; // Optional reason message nested under data
     sql?: string; // Optional SQL string returned by API
+    pyspark?: string; // Optional Pyspark string returned by API
     tab_id?: string; // Optional tab_id string
     [metricName: string]: MetricBlock | string | unknown | undefined;
   };
