@@ -13,6 +13,7 @@ export interface StoredResponse {
       sql?: string;
       reason?: string;
       tab_id?: string;
+      pyspark?: string;
     };
     error?: string;
     reason?: string;
@@ -33,6 +34,7 @@ export interface MetricBlock {
   user_input?: string;
   chat_response?: string;
   sql?: string;
+  pyspark?: string;
   reason?: string;
 }
 interface ResponseIndex {
