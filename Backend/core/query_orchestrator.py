@@ -1,9 +1,11 @@
+# Backend/core/query_orchestrator.py
 from logger.logger import get_logger
 from rag.kb_retriever import KnowledgeBaseRetriever
 from rag.context_builder import build_query_context
 from query_generation.pyspark_generator import PySparkCodeGenerator
 from execution.databricks_executor import DatabricksExecutor
 from summarization.result_summarizer import ResultSummarizer
+from analytics.command_router import StaticCommandRouter
 
 logger = get_logger(__name__)
 
@@ -23,7 +25,12 @@ class QueryOrchestrator:
         context = build_query_context(chunks)
 
         # ---------------- Generate PySpark ----------------
-        pyspark_code = self.codegen.generate(question, context)
+        # PROFILING MODE (Special Commands)
+        if question.startswith("@"):
+            router = StaticCommandRouter(question)
+            pyspark_code = router.generate_pyspark()
+        else:
+            pyspark_code = self.codegen.generate(question, context)
         logger.info("Generated PySpark code:\n%s", pyspark_code)
 
         # ---------------- Execute ----------------
@@ -41,15 +48,15 @@ class QueryOrchestrator:
         result = execution["result"]
 
         # ---------------- Summarize ----------------
-        # Convert rows into dict format for summarizer
-        rows_as_dict = [
-            dict(zip(result["columns"], row))
-            for row in result["rows"]
-        ]
+        # # Convert rows into dict format for summarizer
+        # rows_as_dict = [
+        #     dict(zip(result["columns"], row))
+        #     for row in result["rows"]
+        # ]
 
         summary = self.summarizer.summarize(
             question=question,
-            rows=rows_as_dict
+            result=result
         )
 
         # ---------------- Final JSON ----------------

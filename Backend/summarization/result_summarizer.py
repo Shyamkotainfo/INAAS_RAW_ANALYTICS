@@ -2,7 +2,7 @@ from llm.llm_query import invoke_llm
 
 
 class ResultSummarizer:
-    def summarize(self, question: str, rows: list[dict]) -> str:
+    def summarize(self, question: str, result) -> str:
         """
         Generate business-friendly insights from query results.
         """
@@ -13,8 +13,8 @@ You are a senior data analyst.
 User question:
 {question}
 
-Query result (sample rows):
-{rows}
+Query result (sample result):
+{result}
 
 Generate:
 1. A concise explanation of what the result shows.
