@@ -1,6 +1,5 @@
 # Backend/analytics/quality/quality_code_generator.py
 
-
 class QualityCodeGenerator:
     """
     Generates full PySpark code for quality checks.
@@ -13,8 +12,11 @@ class QualityCodeGenerator:
     def generate(self) -> str:
 
         return f"""
+# ============================================
+# INAAS DATA QUALITY CHECK
+# ============================================
 
-INVALID_TOKENS = {{"NA", "N/A", "NULL", "", " "}}
+INVALID_TOKENS = ["NA", "N/A", "NULL", "", " "]
 NULL_THRESHOLD_WARN = 0.20
 NULL_THRESHOLD_FAIL = 0.50
 DUPLICATE_THRESHOLD = 0
@@ -39,6 +41,7 @@ if total_rows == 0:
 # Primary Key Duplicate Check
 # ---------------------------------------------
 if "{self.primary_key}" in df.columns:
+
     dup_count = (
         df.groupBy("{self.primary_key}")
           .count()
@@ -49,12 +52,14 @@ if "{self.primary_key}" in df.columns:
     if dup_count > DUPLICATE_THRESHOLD:
         quality_report["status"] = "WARN"
         quality_report["issues"].append(
-            f"{self.primary_key} has {{dup_count}} duplicate values"
+            "{self.primary_key} has " + str(dup_count) + " duplicate values"
         )
 
 # ---------------------------------------------
 # Column Level Checks
 # ---------------------------------------------
+dtypes_map = dict(df.dtypes)
+
 for col in df.columns:
 
     null_count = df.filter(F.col(col).isNull()).count()
@@ -66,7 +71,7 @@ for col in df.columns:
         df.filter(
             F.upper(F.trim(F.col(col))).isin(INVALID_TOKENS)
         ).count()
-        if dict(df.dtypes)[col] == "string"
+        if dtypes_map[col] == "string"
         else 0
     )
 
@@ -76,7 +81,7 @@ for col in df.columns:
         col_status = "FAIL"
         quality_report["status"] = "FAIL"
         quality_report["issues"].append(
-            f"{{col}} has critical null rate ({{null_pct:.1%}})"
+            col + " has critical null rate (" + str(round(null_pct*100,1)) + "%)"
         )
 
     elif null_pct > NULL_THRESHOLD_WARN:
@@ -84,24 +89,27 @@ for col in df.columns:
             quality_report["status"] = "WARN"
         col_status = "WARN"
         quality_report["issues"].append(
-            f"{{col}} has high null rate ({{null_pct:.1%}})"
+            col + " has high null rate (" + str(round(null_pct*100,1)) + "%)"
         )
 
     if invalid_count > 0:
         if quality_report["status"] == "PASS":
             quality_report["status"] = "WARN"
         quality_report["issues"].append(
-            f"{{col}} contains {{invalid_count}} invalid placeholder values"
+            col + " contains " + str(invalid_count) + " invalid placeholder values"
         )
 
     quality_report["columns"].append({{
         "column": col,
-        "null_percentage": round(null_pct, 3),
+        "null_percentage": round(null_pct * 100, 2),
         "distinct_count": distinct_count,
         "invalid_values": invalid_count,
         "status": col_status
     }})
 
+# ---------------------------------------------
+# Required by INAAS executor
+# ---------------------------------------------
 final_df = df
 quality_output = quality_report
 """

@@ -5,25 +5,26 @@ class ProfilingCodeGenerator:
     """
     Generates full PySpark code for dataset profiling.
 
-    This code will run inside Databricks.
+    - Runs inside Databricks.
+    - Compatible with: exec(pyspark_code, {}, local_vars)
+    - Does NOT require additional imports.
+    - Produces `profiling_output` dictionary.
     """
 
     def __init__(self, sample_size: int = 5):
         self.sample_size = sample_size
 
     def generate(self) -> str:
-        """
-        Returns full PySpark code as string.
-        """
-
         return f"""
-from pyspark.sql.types import NumericType, DateType, TimestampType
+# ============================================
+# INAAS DATASET PROFILING
+# ============================================
 
 profile = {{}}
 
-# ----------------------------------------------------
+# --------------------------------------------
 # Dataset Level Profiling
-# ----------------------------------------------------
+# --------------------------------------------
 total_rows = df.count()
 
 profile["dataset"] = {{
@@ -32,14 +33,15 @@ profile["dataset"] = {{
     "columns": df.columns
 }}
 
-# ----------------------------------------------------
+# --------------------------------------------
 # Column Level Profiling
-# ----------------------------------------------------
+# --------------------------------------------
 column_profiles = []
 
 for field in df.schema.fields:
     col_name = field.name
     col_type = field.dataType
+    col_type_str = str(col_type).lower()
 
     null_count = df.filter(F.col(col_name).isNull()).count()
     distinct_count = df.select(col_name).distinct().count()
@@ -61,7 +63,18 @@ for field in df.schema.fields:
         "sample_values": [str(s) for s in samples]
     }}
 
-    if isinstance(col_type, (NumericType, DateType, TimestampType)):
+    # ----------------------------------------
+    # Safe numeric/date detection
+    # (no generator expression)
+    # ----------------------------------------
+    if (
+        "int" in col_type_str
+        or "double" in col_type_str
+        or "float" in col_type_str
+        or "long" in col_type_str
+        or "date" in col_type_str
+        or "timestamp" in col_type_str
+    ):
         min_max = df.select(
             F.min(col_name).alias("min"),
             F.max(col_name).alias("max")
@@ -74,7 +87,9 @@ for field in df.schema.fields:
 
 profile["columns"] = column_profiles
 
+# --------------------------------------------
 # Required by INAAS executor
+# --------------------------------------------
 final_df = df
 profiling_output = profile
 """
