@@ -1,3 +1,4 @@
+# Backend/execution/databricks_executor.py
 import requests
 import time
 import json
@@ -6,7 +7,6 @@ from config.settings import settings
 
 class DatabricksExecutor:
     def execute(self, context: dict, pyspark_code: str) -> dict:
-        pyspark_code = self._sanitize_code(pyspark_code)
 
         payload = {
             "run_name": "INAAS Query",
@@ -31,6 +31,7 @@ class DatabricksExecutor:
         resp.raise_for_status()
         run_id = resp.json()["run_id"]
 
+        # Wait for completion
         while True:
             status = requests.get(
                 f"https://{settings.databricks_host}/api/2.1/jobs/runs/get",
@@ -38,36 +39,14 @@ class DatabricksExecutor:
                 params={"run_id": run_id}
             ).json()
 
-
             state = status["state"]["life_cycle_state"]
+
             if state == "TERMINATED":
-                result_state = status["state"].get("result_state")
-                if result_state != "SUCCESS":
-                    out = requests.get(
-                        f"https://{settings.databricks_host}/api/2.1/jobs/runs/get-output",
-                        headers={"Authorization": f"Bearer {settings.databricks_token}"},
-                        params={"run_id": run_id}
-                    ).json()
-
-                    stdout = out.get("logs", "")
-                    stderr = out.get("error", "")
-
-                    print("\n========== DATABRICKS STDOUT ==========")
-                    print(stdout)
-
-                    if stderr:
-                        print("\n========== DATABRICKS STDERR ==========")
-                        print(stderr)
-
-                    return {
-                        "status": "FAILED",
-                        "error": "Databricks execution failed — see logs above"
-                    }
-
                 break
 
             time.sleep(2)
 
+        # Fetch logs regardless of SUCCESS/FAILED
         out = requests.get(
             f"https://{settings.databricks_host}/api/2.1/jobs/runs/get-output",
             headers={"Authorization": f"Bearer {settings.databricks_token}"},
@@ -80,16 +59,27 @@ class DatabricksExecutor:
         print("\n========== DATABRICKS STDOUT ==========")
         print(stdout)
 
-        if stderr:
-            print("\n========== DATABRICKS STDERR ==========")
-            print(stderr)
-
-            return {
-                "status": "FAILED",
-                "error": stderr
-            }
-
+        # ---------------------------------------------
+        # Parse stdout FIRST (ignore result_state)
+        # ---------------------------------------------
         for line in reversed(stdout.splitlines()):
+
+            if line.startswith("INAAS_PROFILING:"):
+                return {
+                    "status": "SUCCESS",
+                    "result": json.loads(
+                        line.replace("INAAS_PROFILING:", "").strip()
+                    )
+                }
+
+            if line.startswith("INAAS_QUALITY:"):
+                return {
+                    "status": "SUCCESS",
+                    "result": json.loads(
+                        line.replace("INAAS_QUALITY:", "").strip()
+                    )
+                }
+
             if line.startswith("INAAS_RESULT:"):
                 return {
                     "status": "SUCCESS",
@@ -98,9 +88,16 @@ class DatabricksExecutor:
                     )
                 }
 
+        # ---------------------------------------------
+        # If nothing parsed, THEN treat as error
+        # ---------------------------------------------
+        if stderr:
+            print("\n========== DATABRICKS STDERR ==========")
+            print(stderr)
+
         return {
             "status": "FAILED",
-            "error": "INAAS_RESULT not found in Databricks logs"
+            "error": "No INAAS_RESULT or INAAS_PROFILING found in Databricks logs"
         }
 
 
@@ -110,16 +107,15 @@ class DatabricksExecutor:
         ]
 
         clean = []
-        for line in code.splitlines():
-            line = line.strip()
 
-            if not line:
+        for line in code.splitlines():
+
+            # Remove markdown fences only
+            if line.strip().startswith("```"):
                 continue
-            if line.startswith("```"):
-                continue
-            if line.startswith("import ") or line.startswith("from "):
-                continue
-            if line.lower().startswith("here"):
+
+            # Skip conversational junk
+            if line.strip().lower().startswith("here"):
                 continue
 
             # HARD BLOCK forbidden ops unless explicitly allowed
