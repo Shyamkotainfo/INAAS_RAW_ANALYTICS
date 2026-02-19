@@ -44,6 +44,7 @@ If the user asks for a "summary":
 - DO NOT compute salary metrics unless explicitly requested
 - DO NOT compute date min/max unless explicitly requested
 
+-When counting rows based on a condition, use filter + count or sum(when()). Do not use count(when().otherwise(0))
 ==============================
 SALARY HANDLING RULE
 ==============================
