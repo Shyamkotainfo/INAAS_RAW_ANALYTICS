@@ -1,60 +1,86 @@
-# Backend/core/query_orchestrator.py
-
 from logger.logger import get_logger
-from rag.kb_retriever import KnowledgeBaseRetriever
-from rag.context_builder import build_query_context
-from query_generation.pyspark_generator import PySparkCodeGenerator
 from execution.databricks_executor import DatabricksExecutor
+from ingestion.metadata_uploader import MetadataUploader
+from rag.bedrock_ingestor import trigger_bedrock_ingestion
+from config.settings import settings
+from query_generation.pyspark_generator import PySparkCodeGenerator
 from summarization.result_summarizer import ResultSummarizer
-from analytics.command_router import StaticCommandRouter
-
 
 logger = get_logger(__name__)
 
 
 class QueryOrchestrator:
-    """
-    Main orchestration engine for INAAS RAW mode.
-
-    Supports:
-        - Natural language queries (LLM → PySpark)
-        - Static commands (@profiling, @quality)
-    """
 
     def __init__(self):
-        self.retriever = KnowledgeBaseRetriever()
-        self.codegen = PySparkCodeGenerator()
         self.executor = DatabricksExecutor()
+        self.codegen = PySparkCodeGenerator()
         self.summarizer = ResultSummarizer()
+        self.active_file = None
 
+    # =====================================================
+    # FILE INGESTION
+    # =====================================================
+    def attach_file(self, file_id: str, file_path: str, file_format: str):
+
+        logger.info("Starting ingestion for file: %s", file_path)
+
+        ingestion = self.executor.ingest_and_profile(
+            file_id=file_id,
+            file_path=file_path,
+            file_format=file_format
+        )
+
+        if ingestion["status"] != "SUCCESS":
+            raise RuntimeError("Ingestion failed")
+
+        schema = ingestion["schema"]
+        profiling = ingestion["profiling"]
+
+        # ----------------------------
+        # Upload schema to S3
+        # ----------------------------
+        uploader = MetadataUploader()
+        uploader.upload(schema, file_id)
+
+        # ----------------------------
+        # Trigger Bedrock ingestion
+        # ----------------------------
+        trigger_bedrock_ingestion(
+            bucket=settings.s3_bucket,
+            prefix="schema/"
+        )
+
+        logger.info("Schema uploaded to S3 and Bedrock ingestion triggered")
+
+        # ----------------------------
+        # Store active file in memory
+        # ----------------------------
+        self.active_file = {
+            "file_id": file_id,
+            "file_path": file_path,
+            "format": file_format,
+            "columns": schema["columns"]
+        }
+
+        return profiling
+
+    # =====================================================
+    # QUERY EXECUTION
+    # =====================================================
     def run(self, question: str) -> dict:
-        logger.info("User question: %s", question)
 
-        # --------------------------------------------------
-        # Retrieve context (file path, schema, etc.)
-        # --------------------------------------------------
-        chunks = self.retriever.retrieve(question)
-        context = build_query_context(chunks)
+        if not self.active_file:
+            raise RuntimeError("No file uploaded. Please upload a file first.")
 
-        # --------------------------------------------------
-        # Generate PySpark
-        # --------------------------------------------------
-        if question.startswith("@"):
-            # Static command mode (profiling / quality)
-            router = StaticCommandRouter(question)
-            pyspark_code = router.generate_pyspark()
-            mode = "static"
-        else:
-            # Normal LLM → PySpark mode
-            pyspark_code = self.codegen.generate(question, context)
-            mode = "query"
+        context = {
+            "file_path": self.active_file["file_path"],
+            "format": self.active_file["format"],
+            "columns": self.active_file["columns"]
+        }
 
-        logger.info("Generated PySpark code:\n%s", pyspark_code)
+        pyspark_code = self.codegen.generate(question, context)
 
-        # --------------------------------------------------
-        # Execute in Databricks
-        # --------------------------------------------------
-        execution = self.executor.execute(context, pyspark_code)
+        execution = self.executor.execute_query(context, pyspark_code)
 
         if execution["status"] != "SUCCESS":
             return {
@@ -67,21 +93,15 @@ class QueryOrchestrator:
 
         result = execution["result"]
 
-        # --------------------------------------------------
-        # Summarization
-        # --------------------------------------------------
         summary = self.summarizer.summarize(
             question=question,
             result=result,
-            mode=mode
+            mode="query"
         )
 
-        # --------------------------------------------------
-        # Final Response
-        # --------------------------------------------------
         return {
             "user_input": question,
             "pyspark": pyspark_code,
-            "results": result,     # FULL profiling JSON goes here
+            "results": result,
             "insights": summary,
         }

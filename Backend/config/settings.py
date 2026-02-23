@@ -61,9 +61,10 @@ class Settings(BaseSettings):
         env="DATABRICKS_RUN_QUERY_SCRIPT"
     )
 
-    databricks_schema_extractor_script: str = Field(
-        "dbfs:/inaas/jobs/schema_extractor.py",
-        env="DATABRICKS_SCHEMA_EXTRACTOR_SCRIPT"
+
+    databricks_ingest_script: str = Field(
+        "dbfs:/inaas/jobs/ingest_and_profile.py",
+        env="DATABRICKS_INGEST_SCRIPT"
     )
 
     # =========================
