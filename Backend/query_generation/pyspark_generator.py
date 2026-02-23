@@ -20,6 +20,10 @@ class PySparkCodeGenerator:
         code = self.llm.generate(prompt).strip()
         logger.info("Received PySpark code from LLM")
 
+        print("\n========== GENERATED PYSPARK ==========\n")
+        print(code)
+        print("\n=======================================\n")
+
         code = self._sanitize(code)
 
         if "final_df" not in code:
@@ -30,6 +34,7 @@ class PySparkCodeGenerator:
             raise RuntimeError("crossJoin is not allowed")
 
         return code
+
 
     def _sanitize(self, code: str) -> str:
         cleaned = []
