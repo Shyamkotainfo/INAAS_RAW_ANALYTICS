@@ -9,7 +9,7 @@ import React, {
   useCallback,
 } from "react";
 import { useRouter } from "next/navigation";
-import AppLayout from "@/components/layout/AppLayout";
+import {AppLayout} from "@/components/layout/AppLayout";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";

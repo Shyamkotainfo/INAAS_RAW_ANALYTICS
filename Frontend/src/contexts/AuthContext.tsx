@@ -78,9 +78,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // return DEMO_INSIGHT_ROUTES.some((route) => path.startsWith(route));
     // return DEMO_INSIGHT_ROUTES.
     if (path === "/") return true;
-    if ((path === "/insights")) return true;
-    if ((path === "/insights/new")) return true;
+    if (path === "/insights") return true;
+        if (path === "/misc-tools") return true;
+
+    if (path === "/misc-tools/data-profiler") return true;
+    if (path == "/misc-tools/data-profiler/task") return true;
+    if (path === "/insights/new") return true;
     if (path.startsWith("/chat")) return true;
+
     return false;
   };
 
