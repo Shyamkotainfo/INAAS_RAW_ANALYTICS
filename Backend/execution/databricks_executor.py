@@ -38,6 +38,37 @@ class DatabricksExecutor:
         }
 
     # =====================================================
+    # UPLOAD TO DATABRICKS
+    # =====================================================
+    def upload_to_volume(self, local_path: str, volume_base_path: str):
+        import os
+        import uuid
+
+        unique_name = f"{uuid.uuid4().hex}_{os.path.basename(local_path)}"
+        target_path = f"{volume_base_path.rstrip('/')}/{unique_name}"
+
+        with open(local_path, "rb") as f:
+            file_bytes = f.read()
+
+        url = (
+            f"https://{settings.databricks_host}"
+            f"/api/2.0/fs/files{target_path}"
+        )
+
+        resp = requests.put(
+            url,
+            headers={
+                "Authorization": f"Bearer {settings.databricks_token}",
+                "Content-Type": "application/octet-stream"
+            },
+            data=file_bytes
+        )
+
+        resp.raise_for_status()
+
+        return target_path
+
+    # =====================================================
     # QUERY EXECUTION
     # =====================================================
     def execute_query(self, context: dict, pyspark_code: str):

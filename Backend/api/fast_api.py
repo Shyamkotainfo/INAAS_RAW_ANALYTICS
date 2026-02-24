@@ -1,9 +1,11 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from core.query_orchestrator import QueryOrchestrator
 from logger.logger import get_logger
 import uuid
+import os
+from config.settings import settings
 
 logger = get_logger(__name__)
 
@@ -33,6 +35,8 @@ ACTIVE_DATASET = {
     "profiling": None
 }
 
+# Databricks Volume Base Path
+VOLUME_BASE = settings.databricks_volume_base
 
 # -------------------------------
 # Request Models
@@ -61,24 +65,59 @@ def health():
 # -------------------------------
 
 @app.post("/upload")
-def upload_dataset(request: UploadRequest):
+async def upload_dataset(
+    file: UploadFile = File(None),
+    file_path: str = Form(None)):
     try:
         dataset_id = f"ds_{uuid.uuid4().hex[:6]}"
 
+        # ---------------------------------------
+        # OPTION 1: File Upload (multipart/form-data)
+        # ---------------------------------------
+        if file:
+
+            contents = await file.read()
+            temp_path = f"/tmp/{file.filename}"
+
+            with open(temp_path, "wb") as f:
+                f.write(contents)
+
+            volume_path = orchestrator.executor.upload_to_volume(
+                local_path=temp_path,
+                volume_base_path=VOLUME_BASE
+            )
+
+            detected_format = file.filename.split(".")[-1]
+
+        # ---------------------------------------
+        # OPTION 2: JSON Body (file_path + format)
+        # ---------------------------------------
+        elif file_path and file_format:
+
+            volume_path = file_path
+            detected_format = file_format
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Provide either file upload or file_path + file_format"
+            )
+
         profiling = orchestrator.attach_file(
             file_id=dataset_id,
-            file_path=request.file_path,
-            file_format=request.file_format
+            file_path=volume_path,
+            file_format=detected_format
         )
 
         ACTIVE_DATASET["dataset_id"] = dataset_id
-        ACTIVE_DATASET["file_path"] = request.file_path
-        ACTIVE_DATASET["file_format"] = request.file_format
+        ACTIVE_DATASET["file_path"] = volume_path
+        ACTIVE_DATASET["file_format"] = detected_format
         ACTIVE_DATASET["profiling"] = profiling
 
         return {
             "success": True,
             "dataset_id": dataset_id,
+            "file_path": volume_path,
             "profiling": profiling
         }
 
