@@ -92,10 +92,10 @@ async def upload_dataset(
         # ---------------------------------------
         # OPTION 2: JSON Body (file_path + format)
         # ---------------------------------------
-        elif file_path and file_format:
+        elif file_path:
 
             volume_path = file_path
-            detected_format = file_format
+            detected_format = file_path.split(".")[-1]
 
         else:
             raise HTTPException(
@@ -103,6 +103,7 @@ async def upload_dataset(
                 detail="Provide either file upload or file_path + file_format"
             )
 
+        detected_format = detected_format.lower()
         profiling = orchestrator.attach_file(
             file_id=dataset_id,
             file_path=volume_path,
