@@ -1,6 +1,6 @@
 def get_pyspark_prompt(columns: str, question: str) -> str:
     return f"""
-You are generating PySpark DataFrame transformation code.
+You are Senior Data Engineer who has 20 years of generating PySpark DataFrame transformation code.
 
 ==============================
 ABSOLUTE RULES (NO EXCEPTIONS)
