@@ -1,78 +1,97 @@
+# core/summarizer/result_summarizer.py
+
 from llm.llm_query import invoke_llm
 
 
 class ResultSummarizer:
     """
-    Generates business-friendly summaries for:
-        - Normal query results
-        - Profiling results
+    Generates structured, analytical business summaries for:
+        - Query results
+        - Dataset profiling
     """
 
-    def summarize(self, question: str, result, mode: str = "query") -> str:
-        """
-        Generate business-friendly insights.
-        """
-
+    def summarize(self, question: str, result, mode: str = "query", max_rows: int = 5) -> str:
         if mode == "static":
-            return self._summarize_profiling(question, result)
-        else:
-            return self._summarize_query(question, result)
+            return self._summarize_profiling(result)
+        return self._summarize_query(question, result, max_rows)
 
     # -----------------------------------------------------
-    # Query Mode Summary
+    # QUERY MODE SUMMARY
     # -----------------------------------------------------
-    def _summarize_query(self, question: str, result) -> str:
+    def _summarize_query(self, question: str, result, max_rows: int) -> str:
+
+        if not result or "rows" not in result or not result["rows"]:
+            return "No data available to summarize."
+
+        headers = result.get("columns", [])
+        rows = result.get("rows", [])
+
+        # Cap rows to avoid token overflow
+        rows = rows[:max_rows]
+
+        # Convert rows into list of dictionaries
+        structured_rows = [
+            dict(zip(headers, row))
+            for row in rows
+        ]
+
+        data_text = f"(Columns: {headers}, Rows: {structured_rows})"
 
         prompt = f"""
-You are a senior data analyst.
+            You are a Senior BI Analyst.
 
-User question:
-{question}
+            Convert the DATA block into 4–6 concise analytical bullet points.
 
-Query result (sample result):
-{result}
+            INSTRUCTIONS:
+            - Use only bullet points. No section headers.
+            - Each bullet must begin with a short analytical label (e.g., "Workforce concentration:", "Compensation spread:", "Role clustering:").
+            - Focus on distributions, outliers, ratios, dominance patterns, and structural trends.
+            - Highlight key metrics or numbers in **bold**.
+            - Italicize secondary comparisons where relevant.
+            - Do not speculate. Do not hallucinate.
+            - Do NOT mention Spark, PySpark, or technical implementation.
 
-Generate:
-1. A concise explanation of what the result shows.
-2. Key insights or patterns.
-3. Any notable trends or anomalies (if applicable).
+            USER QUESTION:
+            {question}
 
-Do NOT mention Spark, PySpark, code, or technical details.
-Write in a clear, business-friendly tone.
-"""
+            DATA:
+            {data_text}
+            """
 
         return invoke_llm(
             prompt=prompt,
             temperature=0.2,
-            max_tokens=300
+            max_tokens=400
         )
 
     # -----------------------------------------------------
-    # Profiling Mode Summary
+    # PROFILING MODE SUMMARY
     # -----------------------------------------------------
-    def _summarize_profiling(self, question: str, result) -> str:
+    def _summarize_profiling(self, profiling_result) -> str:
+
+        if not profiling_result:
+            return "No profiling data available."
 
         prompt = f"""
-You are a senior data quality analyst.
+            You are a Senior Data Quality Analyst.
 
-The user requested dataset profiling.
+            Convert the PROFILING block into structured analytical bullet points.
 
-Profiling output:
-{result}
+            INSTRUCTIONS:
+            - Use only bullet points (4–6 maximum).
+            - Begin each bullet with a short diagnostic label (e.g., "Null exposure:", "Cardinality concentration:", "Metric dispersion:", "Schema volatility:").
+            - Highlight key percentages or metrics in **bold**.
+            - Identify high-null columns, extreme skew, or inconsistent formats.
+            - Mention potential data quality risks clearly.
+            - Do NOT mention Spark or implementation details.
+            - Do not speculate beyond provided data.
 
-Generate:
-1. Overall dataset health summary.
-2. Columns with high null percentages.
-3. Columns that may require data cleaning.
-4. Any potential data quality risks.
-
-Keep the explanation business-focused.
-Do NOT mention Spark, PySpark, or technical implementation.
-Be concise and structured.
-"""
+            PROFILING DATA:
+            {profiling_result}
+            """
 
         return invoke_llm(
             prompt=prompt,
             temperature=0.2,
-            max_tokens=350
+            max_tokens=450
         )
