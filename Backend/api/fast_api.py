@@ -15,7 +15,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,8 +71,7 @@ async def upload_dataset(
         if file:
 
             temp_path = f"/tmp/{file.filename}"
-
-            # 🔥 STREAM FILE IN CHUNKS (prevents 502 memory crash)
+            # STREAM FILE IN CHUNKS (prevents 502 memory crash)
             with open(temp_path, "wb") as f:
                 while chunk := await file.read(1024 * 1024):
                     f.write(chunk)
@@ -79,9 +81,6 @@ async def upload_dataset(
                 volume_base_path=VOLUME_BASE
             )
 
-        # ---------------------------------------
-        # OPTION 2: Direct Volume Path
-        # ---------------------------------------
         elif file_path:
             volume_path = file_path
 
@@ -93,7 +92,6 @@ async def upload_dataset(
 
         detected_format = volume_path.split(".")[-1].lower()
 
-        # 🔥 DO NOT RUN PROFILING HERE
         ACTIVE_DATASET["dataset_id"] = dataset_id
         ACTIVE_DATASET["file_path"] = volume_path
         ACTIVE_DATASET["file_format"] = detected_format
