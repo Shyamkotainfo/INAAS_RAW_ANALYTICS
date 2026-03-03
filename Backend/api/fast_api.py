@@ -119,6 +119,12 @@ def start_profiling():
     if not ACTIVE_DATASET["dataset_id"]:
         raise HTTPException(status_code=400, detail="No dataset uploaded")
 
+    if ACTIVE_DATASET["profiling"] is not None:
+        return {
+            "success": True,
+            "profiling": ACTIVE_DATASET["profiling"]
+        }
+
     profiling = orchestrator.attach_file(
         file_id=ACTIVE_DATASET["dataset_id"],
         file_path=ACTIVE_DATASET["file_path"],
