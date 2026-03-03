@@ -339,12 +339,12 @@ class ApiService {
             typeof d.message === "string"
               ? (d.message as string)
               : "Catalog selection required",
-          catalog_options: Array.isArray(d.catalog_options)
-            ? (d.catalog_options as string[])
-            : undefined,
-          conflicts: Array.isArray(d.conflicts)
-            ? (d.conflicts as string[])
-            : undefined,
+          // catalog_options: Array.isArray(d.catalog_options)
+          //   ? (d.catalog_options as string[])
+          //   : undefined,
+          // conflicts: Array.isArray(d.conflicts)
+          //   ? (d.conflicts as string[])
+          //   : undefined,
           reason:
             typeof d.reason === "string"
               ? (d.reason as string)

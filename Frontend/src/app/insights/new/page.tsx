@@ -74,6 +74,7 @@ type StoredResponsePayload = {
   rawData: unknown[];
   chartTypes: Record<number, ChartData["type"]>;
   resultId: string;
+ 
 };
 
 /* =======================================================================
@@ -202,20 +203,20 @@ export default function CreateInsight() {
      Memo / constants
      ------------------------- */
 
-  const quickQueries = useMemo(
-    () => [
-      "Monthly Churn Trends ",
-      "Monthly Reconnect Trends ",
-      "Daily Churn Trends ",
-      "Daily Reconnect Trends ",
-      "Weekly Churn Trends ",
-      "Weekly Reconnect Trends",
-      "Monthly Analytics Report ",
-      "Daily Analytics Report",
-      "Weekly Analytics Report",
-    ],
-    [],
-  );
+  // const quickQueries = useMemo(
+  //   () => [
+  //     "Monthly Churn Trends ",
+  //     "Monthly Reconnect Trends ",
+  //     "Daily Churn Trends ",
+  //     "Daily Reconnect Trends ",
+  //     "Weekly Churn Trends ",
+  //     "Weekly Reconnect Trends",
+  //     "Monthly Analytics Report ",
+  //     "Daily Analytics Report",
+  //     "Weekly Analytics Report",
+  //   ],
+  //   [],
+  // );
 
   const quotes = useMemo(
     () => [
@@ -323,7 +324,7 @@ export default function CreateInsight() {
 
     initSpeechRecognition();
     setActiveTab(initialTabId);
-  }, []);
+  }, [initialTabId]);
 
   const handleSpeechRecognitionToggle = () => {
     if (!recognition) {

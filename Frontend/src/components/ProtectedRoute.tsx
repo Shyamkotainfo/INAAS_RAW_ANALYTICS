@@ -28,7 +28,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     if (!hasAccess(pathname)) {
       router.replace("/insights");
     }
-  }, [hydrated, user, hasAccess, pathname, router]);
+  }, [hydrated, user, hasAccess, pathname, router,isLoginPage]);
 
   // ✅ Only render once hydrated
   if (!hydrated) {

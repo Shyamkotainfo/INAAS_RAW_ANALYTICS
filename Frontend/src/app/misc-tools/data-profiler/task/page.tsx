@@ -7,16 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, File, Calendar, User, Clock, Play, CheckCircle2, AlertCircle, Database, BarChart3, ChevronDown, X, Upload, Plus, TableIcon } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
-import { useState, useCallback, useEffect } from "react";
+import { ArrowLeft,  Database, BarChart3, ChevronDown,  TableIcon } from "lucide-react";
+import {  useRouter } from "next/navigation";
+import { useState, useEffect, ReactNode } from "react";
 import { apiService } from "@/services/apiService";
 
-interface TopValue {
-  value: string | null;
+// interface TopValue {
+//   value: string | null;
+//   count: number;
+// }
+type TopValue = {
+  value: string | number | null;
   count: number;
-}
-
+};
 interface ColumnProfile {
   column_name: string;
   data_type: string;
@@ -27,7 +30,7 @@ interface ColumnProfile {
   min?: string;
   max?: string;
   mean?: number;
-  top_values?: { value: any; count: number }[];
+  top_values?: TopValue[];
 }
 
 interface ProfilingResponse {
@@ -41,13 +44,14 @@ interface ProfilingResponse {
   };
 }
 
-const statusConfig: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Play }> = {
-  "Completed": { variant: "secondary", icon: CheckCircle2 },
-  "Pending": { variant: "outline", icon: Clock },
-  "Failed": { variant: "destructive", icon: AlertCircle },
-};
 
-function CollapsiblePanel({ title, defaultOpen = true, badge, children }: any) {
+interface CollapsiblePanelProps {
+  title: string;
+  defaultOpen?: boolean;
+  badge?: ReactNode;
+  children: ReactNode;
+}
+function CollapsiblePanel({ title, defaultOpen = true, badge, children }:CollapsiblePanelProps) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -72,7 +76,7 @@ function CollapsiblePanel({ title, defaultOpen = true, badge, children }: any) {
 }
 
 export default function ExplorationTaskDetail() {
-  const { id } = useParams<{ id: string }>();
+  // const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
   const [data, setData] = useState<ProfilingResponse | null>(null);

@@ -52,25 +52,25 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
 
   };
 
-  const getFileName = () => {
-    if (sourceTab === "upload" && file) return file.name;
-    if (sourceTab === "link" && fileUrl.trim()) {
-      try {
-        const url = new URL(fileUrl.trim());
-        const path = url.pathname.split("/").pop();
-        return path || url.hostname;
-      } catch {
-        return fileUrl.trim().split("/").pop() || "Linked file";
-      }
-    }
-    return "";
-  };
+  // const getFileName = () => {
+  //   if (sourceTab === "upload" && file) return file.name;
+  //   if (sourceTab === "link" && fileUrl.trim()) {
+  //     try {
+  //       const url = new URL(fileUrl.trim());
+  //       const path = url.pathname.split("/").pop();
+  //       return path || url.hostname;
+  //     } catch {
+  //       return fileUrl.trim().split("/").pop() || "Linked file";
+  //     }
+  //   }
+  //   return "";
+  // };
 
-  const getFileSize = () => {
-    if (sourceTab === "upload" && file) return formatSize(file.size);
-    if (sourceTab === "link" && fileUrl.trim()) return "Linked";
-    return "";
-  };
+  // const getFileSize = () => {
+  //   if (sourceTab === "upload" && file) return formatSize(file.size);
+  //   if (sourceTab === "link" && fileUrl.trim()) return "Linked";
+  //   return "";
+  // };
 
   const handleSubmit = () => {
     if (!name.trim()) return;
