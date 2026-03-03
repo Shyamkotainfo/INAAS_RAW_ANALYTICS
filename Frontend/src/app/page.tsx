@@ -12,7 +12,7 @@ import {
   AlertTriangle,
   Layers,
 } from "lucide-react";
-import AppLayout from "@/components/layout/AppLayout";
+import {AppLayout} from "@/components/layout/AppLayout";
 import { ProductCard } from "@/components/dashboard/ProductCard";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";

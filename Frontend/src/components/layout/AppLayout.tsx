@@ -1,5 +1,3 @@
-"use client";
-
 import { ReactNode } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { Header } from "./Header";
@@ -11,23 +9,13 @@ interface AppLayoutProps {
   headerActions?: ReactNode;
 }
 
-export default function AppLayout({ children, title, subtitle, headerActions }: AppLayoutProps) {
+export function AppLayout({ children, title, subtitle, headerActions }: AppLayoutProps) {
   return (
-    <div className="flex h-screen w-screen overflow-hidden">
-      
-      {/* FIXED SIDEBAR */}
-      <div className="flex-shrink-0">
-        <AppSidebar />
-      </div>
-
-      {/* MAIN SECTION */}
-      <div className="flex flex-col flex-1 min-w-0">
-
-        {/* FIXED HEADER */}
+    <div className="flex min-h-screen w-full bg-background"> 
+      <AppSidebar />
+      <div className="flex-1 flex flex-col">
         <Header title={title} subtitle={subtitle} headerActions={headerActions} />
-
-        {/* SCROLLABLE CONTENT */}
-        <main className="flex-1 overflow-y-auto px-6 py-4 bg-background">
+        <main className="flex-1 overflow-y-auto p-6">
           {children}
         </main>
       </div>

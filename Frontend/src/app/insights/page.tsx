@@ -1,5 +1,5 @@
 "use client";
-import AppLayout from "@/components/layout/AppLayout";
+import {AppLayout} from "@/components/layout/AppLayout";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { Button } from "@/components/ui/button";
 import { BarChart3, TrendingUp, Eye, FileText, Plus, Lock } from "lucide-react";
