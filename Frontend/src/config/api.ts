@@ -41,6 +41,7 @@ export interface ChatResponse {
     pyspark?: string; // Optional Pyspark string returned by API
     tab_id?: string; // Optional tab_id string
     [metricName: string]: MetricBlock | string | unknown | undefined;
+   
   };
 
   error?: string;
@@ -49,6 +50,8 @@ export interface ChatResponse {
   insights?: string;
   user_input?: string;
   show?: boolean;
+  // catalog_options?: unknown[],
+  // conflicts?: unknown[]
   // Optional tab_id string
 }
 // export interface AnalyticsReport {

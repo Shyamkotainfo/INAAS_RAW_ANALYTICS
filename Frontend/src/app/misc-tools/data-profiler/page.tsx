@@ -1,12 +1,12 @@
 
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Play, Clock, Plus, CheckCircle2, AlertCircle, MoreHorizontal, Trash2, Share2, Copy, Mail, MessageSquare, Users } from "lucide-react";
+import {  Plus,  MoreHorizontal, Trash2, Share2, Copy, Mail, MessageSquare, Users } from "lucide-react";
 import { useState } from "react";
 import { CreateExplorationTaskDialog } from "@/components/misc/CreateExplorationTaskDialog";
 import { DeleteConfirmDialog } from "@/components/governance/DeleteConfirmDialog";
@@ -41,12 +41,12 @@ const sharedTasks: ExplorationTask[] = [
   { id: "s3", name: "Supplier Cost Analysis", description: "Comparative supplier pricing data shared by procurement.", status: "Pending", fileName: "supplier_costs.xlsx", fileSize: "1.6 MB", createdAt: "2024-12-16", createdBy: "Sarah Lee" },
 ];
 
-const statusConfig: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Play }> = {
-  "In Progress": { variant: "default", icon: Play },
-  "Completed": { variant: "secondary", icon: CheckCircle2 },
-  "Pending": { variant: "outline", icon: Clock },
-  "Failed": { variant: "destructive", icon: AlertCircle },
-};
+// const statusConfig: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Play }> = {
+//   "In Progress": { variant: "default", icon: Play },
+//   "Completed": { variant: "secondary", icon: CheckCircle2 },
+//   "Pending": { variant: "outline", icon: Clock },
+//   "Failed": { variant: "destructive", icon: AlertCircle },
+// };
 
 function TaskTable({ tasks, navigate, setDeleteTarget, isShared }: {
   tasks: ExplorationTask[];

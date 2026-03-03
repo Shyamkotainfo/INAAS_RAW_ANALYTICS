@@ -14,12 +14,12 @@ import {
   Home,
   DollarSign,
   Lock,
-  
+
   PieChart,
   GitBranch,
   ChevronRightIcon,
   Users,
-  
+
   Bot,
   Scale,
   Wrench,
@@ -126,9 +126,9 @@ export function AppSidebar() {
         const submenuItems = productSubmenus[product.path];
         for (const item of submenuItems) {
           // Check if current path matches any submenu item
-          if (location === item.path || 
-              location.startsWith(item.path.split('?')[0]) ||
-              (item.path.includes('?') && location + location.search === item.path)) {
+          if (location === item.path ||
+            location.startsWith(item.path.split('?')[0]) ||
+            (item.path.includes('?') && location + location.search === item.path)) {
             return product.path;
           }
         }
@@ -150,7 +150,7 @@ export function AppSidebar() {
     if (productPath && !activeSubmenu) {
       setCollapsed(true);
     }
-  }, [location]);
+  }, [location, activeSubmenu]);
 
   const handleNavClick = (item: typeof products[0]) => {
     if (item.hasSubmenu && productSubmenus[item.path]) {
@@ -173,7 +173,7 @@ export function AppSidebar() {
   const renderNavItem = (item: typeof products[0]) => {
     const canAccess = hasAccess(item.path);
     const hasSubmenu = item.hasSubmenu && productSubmenus[item.path];
-    
+
     if (!canAccess) {
       return (
         <Tooltip key={item.name}>
@@ -303,45 +303,45 @@ export function AppSidebar() {
           collapsed ? "w-16" : "w-64"
         )}
       >
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
-        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-          <DiceLogo size={20} className="text-primary-foreground" />
-        </div>
-        {!collapsed && (
-          <div className="flex flex-col">
-            <span className="font-semibold text-foreground text-lg">DICE</span>
-            <span className="text-[10px] text-muted-foreground leading-tight">Data, Intelligence & Cognitive Engine</span>
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+            <DiceLogo size={20} className="text-primary-foreground" />
           </div>
-        )}
-      </div>
-
-      {/* Products */}
-      <div className="flex-1 overflow-y-auto py-4 px-3">
-        <div className="mb-6">
           {!collapsed && (
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2 block">
-              Products
-            </span>
+            <div className="flex flex-col">
+              <span className="font-semibold text-foreground text-lg">DICE</span>
+              <span className="text-[10px] text-muted-foreground leading-tight">Data, Intelligence & Cognitive Engine</span>
+            </div>
           )}
-          <nav className="space-y-1 mt-2">
-            {products
-              .filter((item) => item.path === "/" || isProductVisible(item.path))
-              .map((item) => renderNavItem(item))}
-          </nav>
         </div>
 
-        <div className="border-t border-sidebar-border pt-4">
-          {!collapsed && (
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2 block">
-              Platform
-            </span>
-          )}
-          <nav className="space-y-1 mt-2">
-            {common.map((item) => renderNavItem({ ...item, color: "" }))}
-          </nav>
+        {/* Products */}
+        <div className="flex-1 overflow-y-auto py-4 px-3">
+          <div className="mb-6">
+            {!collapsed && (
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2 block">
+                Products
+              </span>
+            )}
+            <nav className="space-y-1 mt-2">
+              {products
+                .filter((item) => item.path === "/" || isProductVisible(item.path))
+                .map((item) => renderNavItem(item))}
+            </nav>
+          </div>
+
+          <div className="border-t border-sidebar-border pt-4">
+            {!collapsed && (
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2 block">
+                Platform
+              </span>
+            )}
+            <nav className="space-y-1 mt-2">
+              {common.map((item) => renderNavItem({ ...item, color: "" }))}
+            </nav>
+          </div>
         </div>
-      </div>
 
         {/* Collapse/Expand Toggle */}
         <div className="p-3 border-t border-sidebar-border">
