@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, D
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { apiService } from "@/services/apiService";
 
 interface ExplorationTask {
   id: string;
@@ -152,22 +153,49 @@ export default function DataExplorer() {
   const [tasks, setTasks] = useState<ExplorationTask[]>(initialTasks);
   const [deleteTarget, setDeleteTarget] = useState<ExplorationTask | null>(null);
   const navigate = useRouter();
-  
 
-  const handleCreateTask = (task: { name: string; description: string; fileName: string; fileSize: string }) => {
-    const newTask: ExplorationTask = {
-      id: String(Date.now()),
-      name: task.name,
-      description: task.description,
-      status: "Pending",
-      fileName: task.fileName,
-      fileSize: task.fileSize,
-      createdAt: new Date().toISOString().split("T")[0],
-      createdBy: "Current User",
-    };
-    setTasks((prev) => [newTask, ...prev]);
+
+  // const handleCreateTask = (task: { name: string; description: string; fileName: string; fileSize: string }) => {
+  //   const newTask: ExplorationTask = {
+  //     id: String(Date.now()),
+  //     name: task.name,
+  //     description: task.description,
+  //     status: "Pending",
+  //     fileName: task.fileName,
+  //     fileSize: task.fileSize,
+  //     createdAt: new Date().toISOString().split("T")[0],
+  //     createdBy: "Current User",
+  //   };
+  //   setTasks((prev) => [newTask, ...prev]);
+  // };
+  const handleCreateTask = async (task: {
+    name: string;
+    description: string;
+    file?: File; // IMPORTANT: must receive actual File
+  }) => {
+    try {
+      const result = await apiService.uploadDataset(task.file);
+
+      // if (!result.success) {
+      //   toast.error(result.error || "Upload failed");
+      //   return;
+      // }
+
+      toast.success("Dataset uploaded successfully");
+
+      // Navigate to task page using returned dataset_id
+      sessionStorage.setItem("profiling", JSON.stringify(result));
+
+      navigate.push(
+        `/misc-tools/data-profiler/task`
+      );
+            setCreateDialogOpen(false)
+
+    } catch (error) {
+      console.error(error);
+      toast.error("Something went wrong");
+    }
   };
-
   return (
     <AppLayout title="Data Profiler" subtitle="Browse, query, and explore your data assets">
       <div className="space-y-6">

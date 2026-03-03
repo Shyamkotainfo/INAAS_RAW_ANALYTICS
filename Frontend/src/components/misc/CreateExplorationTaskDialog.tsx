@@ -10,7 +10,7 @@ import { Upload, File, X, Link } from "lucide-react";
 interface CreateExplorationTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (task: { name: string; description: string; fileName: string; fileSize: string }) => void;
+  onSubmit: (task: { name: string; description: string; file?: File, }) => void;
 }
 
 export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: CreateExplorationTaskDialogProps) {
@@ -20,7 +20,7 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
   const [isDragOver, setIsDragOver] = useState(false);
   const [fileUrl, setFileUrl] = useState("");
   const [sourceTab, setSourceTab] = useState("upload");
-
+  const [selectedFile, setSelectedFile] = useState<File | undefined>(undefined);
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -45,7 +45,11 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
   const handleDragLeave = useCallback(() => setIsDragOver(false), []);
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]); // STORE REAL FILE
+    }
     if (e.target.files?.[0]) handleFile(e.target.files[0]);
+
   };
 
   const getFileName = () => {
@@ -73,15 +77,14 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
     onSubmit({
       name: name.trim(),
       description: description.trim(),
-      fileName: getFileName(),
-      fileSize: getFileSize(),
+      file: selectedFile,
     });
     setName("");
     setDescription("");
     setFile(null);
     setFileUrl("");
     setSourceTab("upload");
-    onOpenChange(false);
+    // onOpenChange(false);
   };
 
   return (
@@ -116,9 +119,8 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
                   onDrop={handleDrop}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
-                  className={`relative flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 transition-colors cursor-pointer ${
-                    isDragOver ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/50"
-                  }`}
+                  className={`relative flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 transition-colors cursor-pointer ${isDragOver ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/50"
+                    }`}
                   onClick={() => document.getElementById("file-upload")?.click()}
                 >
                   <Upload className="w-8 h-8 text-muted-foreground" />

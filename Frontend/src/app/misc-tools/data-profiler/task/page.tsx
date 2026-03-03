@@ -1,23 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-
-import { ArrowLeft, Database, BarChart3 } from "lucide-react";
-import { AppLayout } from "@/components/layout/AppLayout";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ArrowLeft, File, Calendar, User, Clock, Play, CheckCircle2, AlertCircle, Database, BarChart3, ChevronDown, X, Upload, Plus, TableIcon } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useState, useCallback, useEffect } from "react";
+import { apiService } from "@/services/apiService";
 
 interface TopValue {
   value: string | null;
@@ -29,127 +22,154 @@ interface ColumnProfile {
   data_type: string;
   nullable: boolean;
   null_count: number;
+  null_percentage: number;
   distinct_count: number;
-  top_values: TopValue[];
+  min?: string;
+  max?: string;
+  mean?: number;
+  top_values?: { value: any; count: number }[];
 }
 
-interface ProfilingData {
-  row_count: number;
-  column_count: number;
-  columns: ColumnProfile[];
+interface ProfilingResponse {
+  success: boolean;
+  dataset_id: string;
+  file_path: string;
+  profiling: {
+    row_count: number;
+    column_count: number;
+    columns: ColumnProfile[];
+  };
+}
+
+const statusConfig: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Play }> = {
+  "Completed": { variant: "secondary", icon: CheckCircle2 },
+  "Pending": { variant: "outline", icon: Clock },
+  "Failed": { variant: "destructive", icon: AlertCircle },
+};
+
+function CollapsiblePanel({ title, defaultOpen = true, badge, children }: any) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <Card>
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer select-none hover:bg-muted/50 transition-colors">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`} />
+                <CardTitle className="text-lg">{title}</CardTitle>
+              </div>
+              {badge}
+            </div>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent>{children}</CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
 }
 
 export default function ExplorationTaskDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
-  const [profiling, setProfiling] = useState<ProfilingData | null>(null);
+  const [data, setData] = useState<ProfilingResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // if (!id) return;
 
-    async function fetchProfiling() {
-      try {
-        setLoading(true);
+    (async function () {
+      const result = await apiService.getDatasetProfiling();
+      if (result.success) setData(result);
+      setLoading(false);
+    })();
 
-        const res = await fetch(
-          `https://2diicvb4i6.us-east-1.awsapprunner.com/profiling`,
-          { cache: "no-store" }
-        );
-        console.log(res,'json')
-
-        const json = await res.json();
-        console.log(json,'json')
-
-        // if (!json.success) {
-        //   throw new Error("Failed to fetch profiling data");
-        // }
-        console.log(json,'json')
-        setProfiling(json.profiling);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchProfiling();
-  }, [id]);
+    // load();
+  }, []);
 
   if (loading) {
     return (
-      <AppLayout title="Loading Dataset">
+      <AppLayout title="Loading...">
         <div className="py-20 text-center text-muted-foreground">
-          Loading profiling results...
+          Loading dataset...
         </div>
       </AppLayout>
     );
   }
 
-  if (error || !profiling) {
+  if (!data) {
     return (
-      <AppLayout title="Dataset Not Found">
-        <div className="py-20 text-center text-muted-foreground space-y-4">
-          <p>Failed to load dataset.</p>
-          <Button
-            variant="outline"
-            onClick={() => router.push("/misc-tools/data-profiler")}
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Data Profiler
-          </Button>
+      <AppLayout title="Task Not Found">
+        <div className="py-20 text-center">
+          Failed to load dataset.
         </div>
       </AppLayout>
     );
   }
 
-  const totalNulls = profiling.columns.reduce(
-    (sum, col) => sum + col.null_count,
-    0
-  );
+  const { profiling } = data;
 
-  const nullRate = (
-    (totalNulls / (profiling.row_count * profiling.column_count)) *
-    100
-  ).toFixed(2);
+  const totalNulls = profiling.columns.reduce((sum, col) => sum + col.null_count, 0);
+  const nullRate = ((totalNulls / (profiling.row_count * profiling.column_count)) * 100).toFixed(2);
 
+  const totalCells = profiling.row_count * profiling.column_count;
+
+  const overallNullRate =
+    totalCells > 0 ? ((totalNulls / totalCells) * 100).toFixed(2) : "0.00";
   return (
-    <AppLayout
-      title={`Dataset: ${id}`}
-      subtitle="Data Profiling Result"
-    >
+    <AppLayout title={`Dataset: ${data.dataset_id}`} subtitle="Exploration Task Detail">
       <div className="space-y-6">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.push("/misc-tools/data-profiler")}
-          className="gap-1"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back
+        <Button variant="ghost" size="sm" onClick={() => router.push("/misc-tools/data-profiler")} className="gap-1">
+          <ArrowLeft className="w-4 h-4" /> Back to Data Profiler
         </Button>
 
+        {/* Overview */}
+        <CollapsiblePanel title="Overview">
+          <p className="text-sm text-muted-foreground leading-relaxed break-all">
+            {data.file_path}
+          </p>
+        </CollapsiblePanel>
+
+        {/* Details */}
+        <CollapsiblePanel title="Details">
+          <div className="space-y-4 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Rows</span>
+              <span className="font-medium">{profiling.row_count.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Columns</span>
+              <span className="font-medium">{profiling.column_count}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Null Rate</span>
+              <span className="font-medium">{nullRate}%</span>
+            </div>
+          </div>
+        </CollapsiblePanel>
+
+        {/* Tabs */}
         <Tabs defaultValue="schema">
           <TabsList>
             <TabsTrigger value="schema" className="gap-1.5">
-              <Database className="w-3.5 h-3.5" />
-              Schema
+              <Database className="w-3.5 h-3.5" /> Schema
             </TabsTrigger>
-            <TabsTrigger value="stats" className="gap-1.5">
-              <BarChart3 className="w-3.5 h-3.5" />
-              Statistics
+            <TabsTrigger value="sample-stats" className="gap-1.5">
+              <BarChart3 className="w-3.5 h-3.5" /> Sample Stats
+            </TabsTrigger>
+            <TabsTrigger value="sample-rows" className="gap-1.5">
+              <TableIcon className="w-3.5 h-3.5" /> Sample Rows
             </TabsTrigger>
           </TabsList>
 
-          {/* ================= SCHEMA TAB ================= */}
+          {/* Schema */}
           <TabsContent value="schema">
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">
-                  Detected Schema ({profiling.column_count} columns)
-                </CardTitle>
+                <CardTitle className="text-sm">Detected Schema</CardTitle>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -158,9 +178,7 @@ export default function ExplorationTaskDetail() {
                       <TableHead>Column</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>Nullable</TableHead>
-                      <TableHead className="text-right">
-                        Distinct Values
-                      </TableHead>
+                      <TableHead className="text-right">Distinct</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -170,10 +188,7 @@ export default function ExplorationTaskDetail() {
                           {col.column_name}
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant="outline"
-                            className="font-mono text-xs"
-                          >
+                          <Badge variant="outline" className="font-mono text-xs">
                             {col.data_type}
                           </Badge>
                         </TableCell>
@@ -191,22 +206,19 @@ export default function ExplorationTaskDetail() {
             </Card>
           </TabsContent>
 
-          {/* ================= STATS TAB ================= */}
-          <TabsContent value="stats">
+          {/* Sample Stats */}
+          <TabsContent value="sample-stats">
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">
-                  Dataset Statistics
-                </CardTitle>
+                <CardTitle className="text-sm">Sample Statistics</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-4">
+                {/* Summary Grid */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
                   <div className="p-4 rounded-lg border">
-                    <p className="text-xs text-muted-foreground">
-                      Total Rows
-                    </p>
+                    <p className="text-xs text-muted-foreground">Total Rows</p>
                     <p className="text-xl font-bold mt-1">
-                      {profiling.row_count.toLocaleString()}
+                      {profiling.row_count}
                     </p>
                   </div>
 
@@ -220,26 +232,121 @@ export default function ExplorationTaskDetail() {
                   </div>
 
                   <div className="p-4 rounded-lg border">
-                    <p className="text-xs text-muted-foreground">
-                      Total Null Values
-                    </p>
+                    <p className="text-xs text-muted-foreground">Null Rate</p>
                     <p className="text-xl font-bold mt-1">
-                      {totalNulls.toLocaleString()}
+                      {overallNullRate}%
                     </p>
                   </div>
 
                   <div className="p-4 rounded-lg border">
                     <p className="text-xs text-muted-foreground">
-                      Null Rate
+                      Duplicate Rows
                     </p>
-                    <p className="text-xl font-bold mt-1">
-                      {nullRate}%
-                    </p>
+                    <p className="text-xl font-bold mt-1">—</p>
                   </div>
+                </div>
+
+                {/* Column Stats */}
+                {/* <div className="overflow-x-auto overflow-y-auto max-h-[400px] border rounded-md"> */}
+                <div className="w-full overflow-x-auto">
+
+                  <Table className="min-w-max whitespace-nowrap">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Column</TableHead>
+                        <TableHead className="text-right">Min</TableHead>
+                        <TableHead className="text-right">Max</TableHead>
+                        <TableHead className="text-right">Mean</TableHead>
+                        <TableHead className="text-right">Null %</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {profiling.columns.map((col) => (
+                        <TableRow key={col.column_name}>
+                          <TableCell className="font-mono text-sm font-medium">
+                            {col.column_name}
+                          </TableCell>
+                          <TableCell className="text-right text-sm">
+                            {col.min ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-sm">
+                            {col.max ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-sm">
+                            {col.mean ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-sm">
+                            {col.null_percentage?.toFixed(2)}%
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Sample Rows → Using Top Values Preview */}
+          <TabsContent value="sample-rows">
+            <Card className="overflow-hidden">
+              <CardHeader>
+                <CardTitle className="text-sm">Sample Rows</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* <div className="overflow-x-auto overflow-y-auto max-h-[400px] border rounded-md"> */}
+                <div className=" overflow-x-auto">
+                  {/* <div className="min-w-max"> */}
+                    <Table className="whitespace-nowrap">
+                      <TableHeader>
+                        <TableRow>
+                          {profiling.columns.map((col) => (
+                            <TableHead key={col.column_name}>
+                              {col.column_name}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {/* {profiling.columns.map((col) => (
+                      <TableRow key={col.column_name}>
+                        <TableCell>{col.column_name}</TableCell>
+                        <TableCell>{col.top_values[0]?.value ?? "NULL"}</TableCell>
+                        <TableCell>{col.top_values[0]?.count ?? 0}</TableCell>
+                      </TableRow>
+                    ))} */}
+                        {Array.from({ length: 5 }).map((_, rowIndex) => (
+                          <TableRow key={rowIndex}>
+                            {profiling.columns.map((col) => {
+                              const nonNullValues =
+                                col.top_values?.filter(
+                                  (tv) =>
+                                    tv.value !== null &&
+                                    tv.value !== "null" &&
+                                    String(tv.value).trim() !== ""
+                                ) || [];
+
+                              const value =
+                                nonNullValues[rowIndex]?.value ?? "—";
+
+                              return (
+                                <TableCell key={col.column_name}>
+                                  {String(value)}
+                                </TableCell>
+                              );
+                            })}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table></div>
+                {/* </div> */}
+                <p className="text-xs text-muted-foreground mt-3">
+                  Preview based on most frequent values
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
         </Tabs>
       </div>
     </AppLayout>

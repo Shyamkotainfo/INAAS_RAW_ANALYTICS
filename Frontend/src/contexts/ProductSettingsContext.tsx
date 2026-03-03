@@ -1,5 +1,6 @@
-// Product settings context for managing sidebar product visibility and lock states
-import { createContext, useContext, useState, ReactNode } from "react";
+"use client";
+
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 interface ProductConfig {
   enabled: boolean;
@@ -35,19 +36,24 @@ const DEFAULT_PRODUCTS: Record<string, ProductConfig> = {
 };
 
 export function ProductSettingsProvider({ children }: { children: ReactNode }) {
-  const [productConfigs, setProductConfigs] = useState<
-    Record<string, ProductConfig>
-  >(() => {
+  const [productConfigs, setProductConfigs] =
+    useState<Record<string, ProductConfig>>(DEFAULT_PRODUCTS);
+
+  // ✅ Load from localStorage (client only)
+  useEffect(() => {
     try {
       const stored = localStorage.getItem("product_configs");
       if (stored) {
-        return JSON.parse(stored);
+        setProductConfigs(JSON.parse(stored));
+        return;
       }
-      // Migrate from old formats
+
+      // ---- Migration logic ----
       const oldStates = localStorage.getItem("product_states");
       if (oldStates) {
         const data = JSON.parse(oldStates);
         const migrated: Record<string, ProductConfig> = {};
+
         Object.keys(data).forEach((key) => {
           if (typeof data[key] === "string") {
             migrated[key] = {
@@ -56,26 +62,39 @@ export function ProductSettingsProvider({ children }: { children: ReactNode }) {
             };
           }
         });
+
+        setProductConfigs(migrated);
         localStorage.setItem("product_configs", JSON.stringify(migrated));
         localStorage.removeItem("product_states");
-        return migrated;
+        return;
       }
+
       const oldEnabled = localStorage.getItem("enabled_products");
       if (oldEnabled) {
         const data = JSON.parse(oldEnabled);
         const migrated: Record<string, ProductConfig> = {};
+
         Object.keys(data).forEach((key) => {
           migrated[key] = { enabled: data[key], locked: false };
         });
+
+        setProductConfigs(migrated);
         localStorage.setItem("product_configs", JSON.stringify(migrated));
         localStorage.removeItem("enabled_products");
-        return migrated;
       }
-      return DEFAULT_PRODUCTS;
     } catch (err) {
       console.error("Failed to load product configs", err);
     }
-  });
+  }, []);
+
+  // ✅ Persist to localStorage whenever state changes
+  useEffect(() => {
+    try {
+      localStorage.setItem("product_configs", JSON.stringify(productConfigs));
+    } catch (err) {
+      console.error("Failed to save product configs", err);
+    }
+  }, [productConfigs]);
 
   const updateConfig = (
     productPath: string,
@@ -83,9 +102,7 @@ export function ProductSettingsProvider({ children }: { children: ReactNode }) {
   ) => {
     setProductConfigs((prev) => {
       const current = prev[productPath] ?? DEFAULT_CONFIG;
-      const updated = { ...prev, [productPath]: { ...current, ...updates } };
-      localStorage.setItem("product_configs", JSON.stringify(updated));
-      return updated;
+      return { ...prev, [productPath]: { ...current, ...updates } };
     });
   };
 
@@ -99,15 +116,12 @@ export function ProductSettingsProvider({ children }: { children: ReactNode }) {
     updateConfig(productPath, { locked: !current.locked });
   };
 
-  const isProductEnabled = (productPath: string): boolean => {
-    return (productConfigs[productPath] ?? DEFAULT_CONFIG).enabled;
-  };
+  const isProductEnabled = (productPath: string): boolean =>
+    (productConfigs[productPath] ?? DEFAULT_CONFIG).enabled;
 
-  const isProductLocked = (productPath: string): boolean => {
-    return (productConfigs[productPath] ?? DEFAULT_CONFIG).locked;
-  };
+  const isProductLocked = (productPath: string): boolean =>
+    (productConfigs[productPath] ?? DEFAULT_CONFIG).locked;
 
-  // Product is visible in sidebar if enabled OR locked
   const isProductVisible = (productPath: string): boolean => {
     const config = productConfigs[productPath] ?? DEFAULT_CONFIG;
     return config.enabled || config.locked;
@@ -131,7 +145,7 @@ export function ProductSettingsProvider({ children }: { children: ReactNode }) {
 
 export function useProductSettings() {
   const context = useContext(ProductSettingsContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error(
       "useProductSettings must be used within a ProductSettingsProvider",
     );

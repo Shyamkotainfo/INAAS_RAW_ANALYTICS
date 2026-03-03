@@ -299,8 +299,8 @@ class ApiService {
           const rawData =
             columns.length > 0 && rawRows.length > 0
               ? rawRows.map((row) =>
-                  Object.fromEntries(columns.map((c, i) => [c, row[i]])),
-                )
+                Object.fromEntries(columns.map((c, i) => [c, row[i]])),
+              )
               : [];
 
           metrics[key] = {
@@ -440,6 +440,63 @@ class ApiService {
     }
   }
 
+  async getDatasetProfiling() {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/start-profiling`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      // 
+
+      return data; // should match ProfilingResponse
+    } catch (error) {
+      console.error("Profiling API Error:", error);
+      return {
+        success: false,
+        error: "Failed to fetch profiling data",
+      };
+    }
+  }
+  async uploadDataset(file?: File) {
+    try {
+      const formData = new FormData();
+      if(file){
+      formData.append("file", file); // backend key must match API
+      }
+      const response = await fetch(
+        `${this.baseUrl}/upload`, // adjust endpoint
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+
+
+      return data;
+      // Expected:
+      // {
+      //   success: true,
+      //   dataset_id: "ds_fe7bed"
+      // }
+    } catch (error) {
+      console.error("Upload API Error:", error);
+      return {
+        success: false,
+        error: "File upload failed",
+      };
+    }
+  }
   // Method to cancel current request
   cancelRequest(): void {
     if (this.abortController) {
