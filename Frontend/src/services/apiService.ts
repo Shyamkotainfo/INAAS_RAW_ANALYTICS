@@ -440,7 +440,11 @@ class ApiService {
     }
   }
 
-  async getDatasetProfiling() {
+  async getDatasetProfiling(
+    dataset_id?: string,
+    file_path?: string,
+    file_format: string = "",
+  ) {
     try {
       const response = await fetch(
         `${this.baseUrl}/start-profiling`,
@@ -449,6 +453,11 @@ class ApiService {
           headers: {
             "Content-Type": "application/json",
           },
+          body: JSON.stringify({
+            dataset_id: dataset_id,
+            file_path: file_path,
+            file_format: file_format
+          })
         }
       );
 
@@ -468,8 +477,8 @@ class ApiService {
   async uploadDataset(file?: File) {
     try {
       const formData = new FormData();
-      if(file){
-      formData.append("file", file); // backend key must match API
+      if (file) {
+        formData.append("file", file); // backend key must match API
       }
       const response = await fetch(
         `${this.baseUrl}/upload`, // adjust endpoint

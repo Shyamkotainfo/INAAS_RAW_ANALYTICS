@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft,  Database, BarChart3, ChevronDown,  TableIcon } from "lucide-react";
-import {  useRouter } from "next/navigation";
-import { useState, useEffect, ReactNode } from "react";
+import { ArrowLeft, Database, BarChart3, ChevronDown, TableIcon, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState, useEffect, ReactNode, useRef } from "react";
 import { apiService } from "@/services/apiService";
 
 // interface TopValue {
@@ -51,7 +51,7 @@ interface CollapsiblePanelProps {
   badge?: ReactNode;
   children: ReactNode;
 }
-function CollapsiblePanel({ title, defaultOpen = true, badge, children }:CollapsiblePanelProps) {
+function CollapsiblePanel({ title, defaultOpen = true, badge, children }: CollapsiblePanelProps) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -81,13 +81,20 @@ export default function ExplorationTaskDetail() {
 
   const [data, setData] = useState<ProfilingResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
     // if (!id) return;
 
     (async function () {
-      const result = await apiService.getDatasetProfiling();
+      if (fetchedRef.current) return;
+      fetchedRef.current = true;
+      const stored = sessionStorage.getItem("profilingUpload");
+      const profiling = stored ? JSON.parse(stored) : null;
+      console.log(profiling)
+      const result = await apiService.getDatasetProfiling(profiling.dataset_id, profiling.file_path, profiling.file_format);
       if (result.success) setData(result);
+      console.log(result)
       setLoading(false);
     })();
 
@@ -167,6 +174,10 @@ export default function ExplorationTaskDetail() {
             <TabsTrigger value="sample-rows" className="gap-1.5">
               <TableIcon className="w-3.5 h-3.5" /> Sample Rows
             </TabsTrigger>
+            <TabsTrigger value="deep-exploration" className="gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" /> Deep Exploration
+            </TabsTrigger>
+
           </TabsList>
 
           {/* Schema */}
@@ -297,59 +308,55 @@ export default function ExplorationTaskDetail() {
               <CardHeader>
                 <CardTitle className="text-sm">Sample Rows</CardTitle>
               </CardHeader>
-              <CardContent>
-                {/* <div className="overflow-x-auto overflow-y-auto max-h-[400px] border rounded-md"> */}
-                <div className=" overflow-x-auto">
-                  {/* <div className="min-w-max"> */}
-                    <Table className="whitespace-nowrap">
-                      <TableHeader>
-                        <TableRow>
-                          {profiling.columns.map((col) => (
-                            <TableHead key={col.column_name}>
-                              {col.column_name}
-                            </TableHead>
-                          ))}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {/* {profiling.columns.map((col) => (
-                      <TableRow key={col.column_name}>
-                        <TableCell>{col.column_name}</TableCell>
-                        <TableCell>{col.top_values[0]?.value ?? "NULL"}</TableCell>
-                        <TableCell>{col.top_values[0]?.count ?? 0}</TableCell>
-                      </TableRow>
-                    ))} */}
-                        {Array.from({ length: 5 }).map((_, rowIndex) => (
-                          <TableRow key={rowIndex}>
-                            {profiling.columns.map((col) => {
-                              const nonNullValues =
-                                col.top_values?.filter(
-                                  (tv) =>
-                                    tv.value !== null &&
-                                    tv.value !== "null" &&
-                                    String(tv.value).trim() !== ""
-                                ) || [];
 
-                              const value =
-                                nonNullValues[rowIndex]?.value ?? "—";
-
-                              return (
-                                <TableCell key={col.column_name}>
-                                  {String(value)}
-                                </TableCell>
-                              );
-                            })}
-                          </TableRow>
+              <CardContent className="overflow-hidden">
+                <div className="overflow-x-auto max-w-[calc(100vw-320px)]">
+                  <Table className="whitespace-nowrap">
+                    <TableHeader>
+                      <TableRow>
+                        {profiling.columns.map((col) => (
+                          <TableHead key={col.column_name}>
+                            {col.column_name}
+                          </TableHead>
                         ))}
-                      </TableBody>
-                    </Table></div>
-                {/* </div> */}
+                      </TableRow>
+                    </TableHeader>
+
+                    <TableBody>
+                      {Array.from({ length: 5 }).map((_, rowIndex) => (
+                        <TableRow key={rowIndex}>
+                          {profiling.columns.map((col) => {
+                            const nonNullValues =
+                              col.top_values?.filter(
+                                (tv) =>
+                                  tv.value !== null &&
+                                  tv.value !== "null" &&
+                                  String(tv.value).trim() !== ""
+                              ) || [];
+
+                            const value = nonNullValues[rowIndex]?.value ?? "—";
+
+                            return (
+                              <TableCell key={col.column_name}>
+                                {String(value)}
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
                 <p className="text-xs text-muted-foreground mt-3">
                   Preview based on most frequent values
                 </p>
               </CardContent>
             </Card>
           </TabsContent>
+          <TabsContent value="deep-exploration">
+            <Card></Card>
+            </TabsContent>
 
         </Tabs>
       </div>
