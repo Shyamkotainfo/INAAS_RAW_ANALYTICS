@@ -8,8 +8,6 @@ import React, {
     useEffect,
     useCallback,
 } from "react";
-import { useRouter } from "next/navigation";
-import { AppLayout } from "@/components/layout/AppLayout";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,13 +19,10 @@ import {
     LineChart as LineChartIcon,
     PieChart as PieChartIcon,
     AreaChart as AreaChartIcon,
-    ArrowLeft,
+
     Table as TableIcon,
     Download,
-    Calendar,
-    Trash2,
-    Share2,
-    Save,
+
     SendHorizonal,
 } from "lucide-react";
 
@@ -121,7 +116,7 @@ const MAX_IN_MEMORY_RESPONSES = 15;
    Component
    ======================================================================= */
 interface DeepExplorerInsight {
-  dataset_id: string;
+    dataset_id: string;
 }
 export default function DeepExplorerInsight({ dataset_id }: DeepExplorerInsight) {
 
@@ -1498,7 +1493,7 @@ export default function DeepExplorerInsight({ dataset_id }: DeepExplorerInsight)
                 <div className="glass-card rounded-xl px-6 py-2 space-y-1">
                     <div className="flex items-center gap-2">
                         <Sparkles className="w-5 h-5 text-primary" />
-                        <h2 className="font-semibold text-ml">Ask a question {dataset_id}</h2>
+                        <h2 className="font-semibold text-ml">Ask a question </h2>
                     </div>
                     <div>
                         <div className="relative w-full border   rounded-2xl px-6 py-1">
