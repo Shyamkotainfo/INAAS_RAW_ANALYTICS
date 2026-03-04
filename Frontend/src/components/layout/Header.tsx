@@ -24,21 +24,23 @@ interface HeaderProps {
 export function Header({ title, subtitle, headerActions }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
-  const route = useRouter();
+  const router = useRouter();
 
   const handleLogout = () => {
     logout();
-    route.push("/login");
+    router.push("/login");
   };
 
   const getUserInitials = () => {
-    if (!user) return "U";
+    if (!user?.username) return "U";
     return user.username.charAt(0).toUpperCase();
   };
 
   const getUserDisplayName = () => {
-    if (!user) return "User";
-    return user.username === "admin" ? "Administrator" : "Demo Insight User";
+    if (!user?.username) return "User";
+    return user.username === "admin"
+      ? "Administrator"
+      : "Demo Insight User";
   };
 
   return (
@@ -63,23 +65,35 @@ export function Header({ title, subtitle, headerActions }: HeaderProps) {
           />
         </div>
 
-        {/* Dark Mode Toggle */}
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        {/* Theme Toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={toggleTheme}
           className="text-muted-foreground hover:text-foreground"
         >
-          {theme === "light" ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+          {theme === "light" ? (
+            <Moon className="w-5 h-5" />
+          ) : (
+            <Sun className="w-5 h-5" />
+          )}
         </Button>
 
         {/* Help */}
-        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground hover:text-foreground"
+        >
           <HelpCircle className="w-5 h-5" />
         </Button>
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground relative">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground hover:text-foreground relative"
+        >
           <Bell className="w-5 h-5" />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary rounded-full" />
         </Button>
@@ -89,24 +103,38 @@ export function Header({ title, subtitle, headerActions }: HeaderProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-9 w-9 rounded-full">
               <Avatar className="h-9 w-9">
-                <AvatarImage src="/placeholder.svg" alt="User" />
-                <AvatarFallback className="bg-primary text-primary-foreground">{getUserInitials()}</AvatarFallback>
+                {/* No external image → prevents 404 */}
+                <AvatarFallback className="bg-primary text-primary-foreground">
+                  {getUserInitials()}
+                </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
+
           <DropdownMenuContent className="w-56" align="end">
             <DropdownMenuLabel>
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">{getUserDisplayName()}</p>
-                <p className="text-xs text-muted-foreground capitalize">{user?.role} role</p>
+                <p className="text-sm font-medium">
+                  {getUserDisplayName()}
+                </p>
+                <p className="text-xs text-muted-foreground capitalize">
+                  {user?.role} role
+                </p>
               </div>
             </DropdownMenuLabel>
+
             <DropdownMenuSeparator />
+
             <DropdownMenuItem>Profile</DropdownMenuItem>
             <DropdownMenuItem>Billing</DropdownMenuItem>
             <DropdownMenuItem>Team</DropdownMenuItem>
+
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive" onClick={handleLogout}>
+
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={handleLogout}
+            >
               <LogOut className="w-4 h-4 mr-2" />
               Log out
             </DropdownMenuItem>
