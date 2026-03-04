@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, Database, BarChart3, ChevronDown, TableIcon } from "lucide-react";
+import { ArrowLeft, Database, BarChart3, ChevronDown, TableIcon, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, ReactNode, useRef } from "react";
 import { apiService } from "@/services/apiService";
@@ -174,6 +174,10 @@ export default function ExplorationTaskDetail() {
             <TabsTrigger value="sample-rows" className="gap-1.5">
               <TableIcon className="w-3.5 h-3.5" /> Sample Rows
             </TabsTrigger>
+            <TabsTrigger value="deep-exploration" className="gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" /> Deep Exploration
+            </TabsTrigger>
+
           </TabsList>
 
           {/* Schema */}
@@ -350,6 +354,9 @@ export default function ExplorationTaskDetail() {
               </CardContent>
             </Card>
           </TabsContent>
+          <TabsContent value="deep-exploration">
+            <Card></Card>
+            </TabsContent>
 
         </Tabs>
       </div>
