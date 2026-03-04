@@ -85,10 +85,10 @@ class QueryOrchestrator:
     # =====================================================
     # QUERY EXECUTION
     # =====================================================
-    def run(self, question: str) -> dict:
+    def run(self, user_input: str, dataset_id: str) -> dict:
 
-        if not self.active_file:
-            raise RuntimeError("No file uploaded. Please upload a file first.")
+        if not self.active_file or self.active_file["file_id"] != dataset_id:
+            raise RuntimeError("Dataset not loaded. Please run profiling first.")
 
         context = {
             "file_path": self.active_file["file_path"],
@@ -96,13 +96,13 @@ class QueryOrchestrator:
             "columns": self.active_file["columns"]
         }
 
-        pyspark_code = self.codegen.generate(question, context)
+        pyspark_code = self.codegen.generate(user_input, context)
 
         execution = self.executor.execute_query(context, pyspark_code)
 
         if execution["status"] != "SUCCESS":
             return {
-                "user_input": question,
+                "user_input": user_input,
                 "pyspark": pyspark_code,
                 "results": None,
                 "insights": None,
@@ -112,13 +112,13 @@ class QueryOrchestrator:
         result = execution["result"]
 
         summary = self.summarizer.summarize(
-            question=question,
+            question=user_input,
             result=result,
             mode="query"
         )
 
         return {
-            "user_input": question,
+            "user_input": user_input,
             "pyspark": pyspark_code,
             "results": result,
             "insights": summary,
