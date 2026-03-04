@@ -11,6 +11,7 @@ import { ArrowLeft, Database, BarChart3, ChevronDown, TableIcon, Sparkles } from
 import { useRouter } from "next/navigation";
 import { useState, useEffect, ReactNode, useRef } from "react";
 import { apiService } from "@/services/apiService";
+import DeepExplorerInsight from "@/components/DeepExplorer";
 
 // interface TopValue {
 //   value: string | null;
@@ -355,8 +356,8 @@ export default function ExplorationTaskDetail() {
             </Card>
           </TabsContent>
           <TabsContent value="deep-exploration">
-            <Card></Card>
-            </TabsContent>
+            <Card><DeepExplorerInsight dataset_id={data.dataset_id}/></Card>
+          </TabsContent>
 
         </Tabs>
       </div>

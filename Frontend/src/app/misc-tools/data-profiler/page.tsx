@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {  Plus,  MoreHorizontal, Trash2, Share2, Copy, Mail, MessageSquare, Users } from "lucide-react";
+import { Plus, MoreHorizontal, Trash2, Share2, Copy, Mail, MessageSquare, Users } from "lucide-react";
 import { useState } from "react";
 import { CreateExplorationTaskDialog } from "@/components/misc/CreateExplorationTaskDialog";
 import { DeleteConfirmDialog } from "@/components/governance/DeleteConfirmDialog";
@@ -172,9 +172,10 @@ export default function DataExplorer() {
     name: string;
     description: string;
     file?: File; // IMPORTANT: must receive actual File
+    file_url?: string
   }) => {
     try {
-      const result = await apiService.uploadDataset(task.file);
+      const result = await apiService.uploadDataset(task.file, task.file_url);
 
       // if (!result.success) {
       //   toast.error(result.error || "Upload failed");
@@ -189,7 +190,7 @@ export default function DataExplorer() {
       navigate.push(
         `/misc-tools/data-profiler/task`
       );
-            setCreateDialogOpen(false)
+      setCreateDialogOpen(false)
 
     } catch (error) {
       console.error(error);

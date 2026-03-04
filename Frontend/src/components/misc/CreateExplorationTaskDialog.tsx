@@ -77,7 +77,8 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
     onSubmit({
       name: name.trim(),
       description: description.trim(),
-      file: selectedFile,
+      ...file && { file: selectedFile },
+      ...fileUrl && { file_url: fileUrl }
     });
     setName("");
     setDescription("");
@@ -89,13 +90,13 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>New Data Exploration Task</DialogTitle>
           <DialogDescription>Create a task to explore and analyze data assets.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="space-y-4 overflow-y-auto py-2 px-1">
           <div className="space-y-2">
             <Label htmlFor="task-name">Name</Label>
             <Input id="task-name" placeholder="e.g. Q4 Revenue Analysis" value={name} onChange={(e) => setName(e.target.value)} />
@@ -108,7 +109,11 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
 
           <div className="space-y-2">
             <Label>Data Source</Label>
-            <Tabs value={sourceTab} onValueChange={setSourceTab}>
+            <Tabs value={sourceTab} onValueChange={(val)=>{setSourceTab(val);
+              setFile(null);
+              setFileUrl("");
+              // setSelectedFile()
+            }}>
               <TabsList className="w-full">
                 <TabsTrigger value="upload" className="flex-1 gap-1.5"><Upload className="w-3.5 h-3.5" /> Upload File</TabsTrigger>
                 <TabsTrigger value="link" className="flex-1 gap-1.5"><Link className="w-3.5 h-3.5" /> File URL</TabsTrigger>
