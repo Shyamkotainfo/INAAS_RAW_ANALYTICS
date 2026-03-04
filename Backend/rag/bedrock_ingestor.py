@@ -1,7 +1,7 @@
 # Backend/rag/bedrock_ingestor.py
 
-import time
 import boto3
+from botocore.exceptions import ClientError
 from config.settings import settings
 from logger.logger import get_logger
 
@@ -16,47 +16,55 @@ class BedrockIngestor:
         )
 
     def ingest(self):
+        """
+        Triggers ingestion job in Bedrock Knowledge Base.
+        This method is NON-BLOCKING.
+        """
+
         logger.info("Starting Bedrock ingestion")
 
-        response = self.client.start_ingestion_job(
-            knowledgeBaseId=settings.bedrock_kb_id,
-            dataSourceId=settings.bedrock_data_source_id
-        )
-
-        job_id = response["ingestionJob"]["ingestionJobId"]
-        logger.info("Bedrock ingestion job started: %s", job_id)
-
-        while True:
-            job = self.client.get_ingestion_job(
+        try:
+            response = self.client.start_ingestion_job(
                 knowledgeBaseId=settings.bedrock_kb_id,
-                dataSourceId=settings.bedrock_data_source_id,
-                ingestionJobId=job_id
+                dataSourceId=settings.bedrock_data_source_id
             )
 
-            status = job["ingestionJob"]["status"]
-            logger.info("Bedrock ingestion status: %s", status)
+            job_id = response["ingestionJob"]["ingestionJobId"]
+            logger.info("Bedrock ingestion job started: %s", job_id)
 
-            if status == "COMPLETE":
-                logger.info("Bedrock ingestion completed")
-                return job_id
+            return {
+                "status": "STARTED",
+                "job_id": job_id
+            }
 
-            if status in {"FAILED", "STOPPED"}:
-                raise RuntimeError(f"Bedrock ingestion failed: {status}")
+        except ClientError as e:
+            error_code = e.response["Error"]["Code"]
 
-            time.sleep(10)
+            if error_code == "ConflictException":
+                logger.info(
+                    "Ingestion already running for this data source. Skipping new trigger."
+                )
+                return {
+                    "status": "ALREADY_RUNNING"
+                }
+
+            logger.error("Bedrock ingestion failed: %s", str(e))
+            raise
 
 
 # -------------------------------------------------
-# Public helper (THIS is what executors import)
+# Public helper
 # -------------------------------------------------
 def trigger_bedrock_ingestion(bucket: str, prefix: str):
     """
-    Bucket + prefix are already configured in the Bedrock data source.
-    This function simply triggers ingestion.
+    Bucket + prefix are already configured in Bedrock data source.
+    This just triggers ingestion.
     """
+
     logger.info(
         "Triggering Bedrock ingestion for s3://%s/%s",
-        bucket, prefix
+        bucket,
+        prefix
     )
 
     ingestor = BedrockIngestor()

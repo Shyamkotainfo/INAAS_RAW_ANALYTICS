@@ -1,3 +1,5 @@
+# Backend/core/query_orchestrator.py
+
 from logger.logger import get_logger
 from execution.databricks_executor import DatabricksExecutor
 from ingestion.metadata_uploader import MetadataUploader
@@ -24,6 +26,9 @@ class QueryOrchestrator:
 
         logger.info("Starting ingestion for file: %s", file_path)
 
+        # ----------------------------
+        # Databricks profiling
+        # ----------------------------
         ingestion = self.executor.ingest_and_profile(
             file_id=file_id,
             file_path=file_path,
@@ -43,14 +48,27 @@ class QueryOrchestrator:
         uploader.upload(schema, file_id)
 
         # ----------------------------
-        # Trigger Bedrock ingestion
+        # Trigger Bedrock ingestion (SAFE)
         # ----------------------------
-        trigger_bedrock_ingestion(
-            bucket=settings.s3_bucket,
-            prefix="schema/"
-        )
+        try:
+            ingestion_status = trigger_bedrock_ingestion(
+                bucket=settings.s3_bucket,
+                prefix="schema/"
+            )
 
-        logger.info("Schema uploaded to S3 and Bedrock ingestion triggered")
+            logger.info(
+                "Bedrock ingestion trigger response: %s",
+                ingestion_status
+            )
+
+        except Exception as e:
+            # IMPORTANT: Do not fail profiling if Bedrock fails
+            logger.warning(
+                "Bedrock ingestion failed but profiling succeeded: %s",
+                str(e)
+            )
+
+        logger.info("Schema uploaded to S3 and ingestion process handled")
 
         # ----------------------------
         # Store active file in memory
