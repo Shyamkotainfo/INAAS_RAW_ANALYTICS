@@ -184,7 +184,7 @@ export default function DataExplorer() {
       toast.success("Dataset uploaded successfully");
 
       // Navigate to task page using returned dataset_id
-      sessionStorage.setItem("profiling", JSON.stringify(result));
+      sessionStorage.setItem("profilingUpload", JSON.stringify(result));
 
       navigate.push(
         `/misc-tools/data-profiler/task`
