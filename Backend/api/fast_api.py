@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from core.query_orchestrator import QueryOrchestrator
 from logger.logger import get_logger
 from config.settings import settings
+from analytics.dataset_overview_generator import DatasetOverviewGenerator
 import uuid
 
 logger = get_logger(__name__)
@@ -25,6 +26,7 @@ app.add_middleware(
 )
 
 orchestrator = QueryOrchestrator()
+overview_generator = DatasetOverviewGenerator()
 VOLUME_BASE = settings.databricks_volume_base
 
 
@@ -107,22 +109,28 @@ async def upload_dataset(
 def start_profiling(request: StartProfilingRequest):
 
     try:
+
+        # Step 1 — Run profiling
         profiling = orchestrator.attach_file(
             file_id=request.dataset_id,
             file_path=request.file_path,
             file_format=request.file_format
         )
 
+        # Step 2 — Generate overview using LLM
+        overview = overview_generator.generate(profiling)
+
+        # Step 3 — Return response
         return {
             "success": True,
             "dataset_id": request.dataset_id,
+            "overview": overview,
             "profiling": profiling
         }
 
     except Exception as e:
         logger.exception("Profiling failed")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 # =====================================================
 # 3️⃣ RUN QUERY (Stateless)
