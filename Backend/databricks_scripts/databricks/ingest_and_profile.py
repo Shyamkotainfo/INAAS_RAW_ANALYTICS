@@ -4,16 +4,9 @@ from datetime import datetime, timezone
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
-# ---------------------------------------------------------
-# Initialize Spark
-# ---------------------------------------------------------
 spark = SparkSession.builder.getOrCreate()
-
 spark.conf.set("spark.sql.legacy.timeParserPolicy", "LEGACY")
 
-# ---------------------------------------------------------
-# Parse input arguments
-# ---------------------------------------------------------
 args = json.loads(sys.argv[1])
 
 file_id = args["file_id"]
@@ -26,13 +19,37 @@ print(f"FILE_PATH={file_path}")
 print(f"FORMAT={file_format}")
 
 # ---------------------------------------------------------
-# Load DataFrame
+# Detect CSV delimiter
+# ---------------------------------------------------------
+def detect_delimiter(path):
+    delimiters = [",", ";", "|", "\t"]
+
+    try:
+        local_path = path.replace("dbfs:", "/dbfs")
+
+        with open(local_path, "r", encoding="utf-8") as f:
+            header = f.readline()
+
+        counts = {d: header.count(d) for d in delimiters}
+
+        return max(counts, key=counts.get)
+
+    except:
+        return ","
+
+
+# ---------------------------------------------------------
+# Load Data
 # ---------------------------------------------------------
 if file_format == "csv":
+
+    delimiter = detect_delimiter(file_path)
+
     df = (
         spark.read
         .option("header", "true")
         .option("inferSchema", "true")
+        .option("delimiter", delimiter)
         .csv(file_path)
     )
 
@@ -50,54 +67,95 @@ elif file_format == "json":
 else:
     raise ValueError(f"Unsupported format: {file_format}")
 
+
 # ---------------------------------------------------------
-# Dataset Level Profiling
+# Cache dataset (major speed improvement)
+# ---------------------------------------------------------
+df = df.cache()
+
+# ---------------------------------------------------------
+# Dataset level metrics
 # ---------------------------------------------------------
 row_count = df.count()
 column_count = len(df.columns)
 
+duplicate_rows = row_count - df.dropDuplicates().count()
+
+# ---------------------------------------------------------
+# Sample rows (consistent for UI)
+# ---------------------------------------------------------
+sample_rows = df.limit(5).collect()
+
+# ---------------------------------------------------------
+# Null counts (single pass aggregation)
+# ---------------------------------------------------------
+null_exprs = [
+    F.sum(F.when(F.col(c).isNull(), 1).otherwise(0)).alias(c)
+    for c in df.columns
+]
+
+null_counts_row = df.select(null_exprs).collect()[0]
+null_counts = {c: null_counts_row[c] for c in df.columns}
+
+# ---------------------------------------------------------
+# Distinct counts (fast approx algorithm)
+# ---------------------------------------------------------
+distinct_exprs = [
+    F.approx_count_distinct(c).alias(c)
+    for c in df.columns
+]
+
+distinct_row = df.select(distinct_exprs).collect()[0]
+distinct_counts = {c: distinct_row[c] for c in df.columns}
+
 profiling = {
     "row_count": row_count,
     "column_count": column_count,
+    "duplicate_rows": duplicate_rows,
     "columns": []
 }
 
 schema_columns = []
 
 # ---------------------------------------------------------
-# Column-Level Profiling
+# Supported date formats
+# ---------------------------------------------------------
+date_formats = [
+    "yyyy-MM-dd",
+    "dd-MM-yyyy",
+    "MM-dd-yyyy",
+    "yyyy/MM/dd",
+    "dd/MM/yyyy",
+    "MM/dd/yyyy",
+    "dd.MM.yyyy"
+]
+
+# ---------------------------------------------------------
+# Column profiling
 # ---------------------------------------------------------
 for field in df.schema.fields:
 
     col_name = field.name
     col_type = field.dataType.simpleString()
     col_type_lower = col_type.lower()
-    col_name_lower = col_name.lower()
     nullable = field.nullable
 
-    null_count = df.filter(F.col(col_name).isNull()).count()
-    distinct_count = df.select(F.col(col_name)).distinct().count()
+    null_count = null_counts[col_name]
+    distinct_count = distinct_counts[col_name]
 
     null_percentage = (
         round((null_count / row_count) * 100, 2)
         if row_count > 0 else 0
     )
 
-    top_values_rows = (
-        df.groupBy(F.col(col_name))
-        .count()
-        .orderBy(F.desc("count"))
-        .limit(5)
-        .collect()
-    )
+    # -----------------------------------------------------
+    # Sample values from same rows
+    # -----------------------------------------------------
+    sample_values = []
 
-    top_values = [
-        {
-            "value": str(row[col_name]) if row[col_name] is not None else None,
-            "count": row["count"]
-        }
-        for row in top_values_rows
-    ]
+    for row in sample_rows:
+        val = row[col_name]
+        sample_values.append(str(val) if val is not None else None)
 
     column_profile = {
         "column_name": col_name,
@@ -106,113 +164,105 @@ for field in df.schema.fields:
         "null_count": null_count,
         "null_percentage": null_percentage,
         "distinct_count": distinct_count,
-        "top_values": top_values
+        "sample_values": sample_values
     }
 
-    # -----------------------------------------------------
-    # SMART STATISTICAL DETECTION
-    # -----------------------------------------------------
     min_value = None
     max_value = None
     mean_value = None
 
-    # 1️⃣ Identifier detection (skip stats)
-    identifier_keywords = ["id", "code", "emp", "number"]
-    if any(keyword in col_name_lower for keyword in identifier_keywords):
-        pass
+    # -----------------------------------------------------
+    # DATE DETECTION
+    # -----------------------------------------------------
+    date_detected = False
 
-    else:
+    for fmt in date_formats:
 
-        # 2️⃣ Date detection FIRST
-        possible_formats = [
-            "yyyy-MM-dd",
-            "dd-MM-yyyy",
-            "MM-dd-yyyy",
-            "yyyy/MM/dd",
-            "dd/MM/yyyy",
-            "MM/dd/yyyy"
-        ]
+        df_date = df.withColumn(
+            "_temp_date",
+            F.to_date(F.col(col_name), fmt)
+        )
 
-        date_detected = False
+        valid_dates = df_date.filter(
+            F.col("_temp_date").isNotNull()
+        ).count()
 
-        for fmt in possible_formats:
-            df_date = df.withColumn(
-                "_temp_date",
-                F.to_date(F.col(col_name), fmt)
-            )
+        if row_count > 0 and valid_dates / row_count > 0.7:
 
-            valid_dates = df_date.filter(
-                F.col("_temp_date").isNotNull()
+            stats = df_date.select(
+                F.min("_temp_date").alias("min"),
+                F.max("_temp_date").alias("max")
+            ).first()
+
+            column_profile["data_type"] = "date"
+
+            min_value = stats["min"]
+            max_value = stats["max"]
+
+            date_detected = True
+            break
+
+    # -----------------------------------------------------
+    # NUMERIC DETECTION
+    # -----------------------------------------------------
+    if not date_detected:
+
+        numeric_types = ["int", "double", "float", "long", "decimal"]
+
+        if any(t in col_type_lower for t in numeric_types):
+
+            stats = df.select(
+                F.min(col_name).alias("min"),
+                F.max(col_name).alias("max"),
+                F.avg(col_name).alias("mean")
+            ).first()
+
+            min_value = stats["min"]
+            max_value = stats["max"]
+
+            # detect year column
+            year_check = df.filter(
+                (F.col(col_name) >= 1900) &
+                (F.col(col_name) <= 2100)
             ).count()
 
-            if row_count > 0 and valid_dates / row_count > 0.7:
-                stats = df_date.select(
-                    F.min("_temp_date").alias("min"),
-                    F.max("_temp_date").alias("max")
-                ).first()
+            if row_count > 0 and year_check / row_count < 0.9:
+                mean_value = stats["mean"]
 
-                min_value = stats["min"]
-                max_value = stats["max"]
-                date_detected = True
-                break
+        else:
 
-        # 3️⃣ Native numeric columns
-        if not date_detected:
+            metric_keywords = ["salary", "pay", "amount", "price", "cost"]
 
-            numeric_types = ["int", "bigint", "double", "float", "long", "decimal"]
+            if any(k in col_name.lower() for k in metric_keywords):
 
-            if any(t in col_type_lower for t in numeric_types):
+                df_numeric = df.withColumn(
+                    "_temp_numeric",
+                    F.regexp_extract(
+                        F.col(col_name),
+                        r"([-+]?[0-9]*\.?[0-9]+)",
+                        0
+                    ).cast("double")
+                )
 
-                stats = df.select(
-                    F.min(col_name).alias("min"),
-                    F.max(col_name).alias("max"),
-                    F.avg(col_name).alias("mean")
-                ).first()
-
-                min_value = stats["min"]
-                max_value = stats["max"]
-
-                # Year detection → no mean
-                year_check = df.filter(
-                    (F.col(col_name) >= 1900) &
-                    (F.col(col_name) <= 2100)
+                numeric_count = df_numeric.filter(
+                    F.col("_temp_numeric").isNotNull()
                 ).count()
 
-                if row_count > 0 and year_check / row_count < 0.9:
+                if row_count > 0 and numeric_count / row_count > 0.7:
+
+                    stats = df_numeric.select(
+                        F.min("_temp_numeric").alias("min"),
+                        F.max("_temp_numeric").alias("max"),
+                        F.avg("_temp_numeric").alias("mean")
+                    ).first()
+
+                    min_value = stats["min"]
+                    max_value = stats["max"]
                     mean_value = stats["mean"]
 
-            else:
-                # 4️⃣ Numeric inside string (salary-like only)
-                metric_keywords = ["salary", "pay", "amount", "price", "cost"]
-
-                if any(k in col_name_lower for k in metric_keywords):
-
-                    df_numeric = df.withColumn(
-                        "_temp_numeric",
-                        F.regexp_extract(
-                            F.col(col_name),
-                            r"([-+]?[0-9]*\.?[0-9]+)",
-                            0
-                        ).cast("double")
-                    )
-
-                    numeric_count = df_numeric.filter(
-                        F.col("_temp_numeric").isNotNull()
-                    ).count()
-
-                    if row_count > 0 and numeric_count / row_count > 0.7:
-
-                        stats = df_numeric.select(
-                            F.min("_temp_numeric").alias("min"),
-                            F.max("_temp_numeric").alias("max"),
-                            F.avg("_temp_numeric").alias("mean")
-                        ).first()
-
-                        min_value = stats["min"]
-                        max_value = stats["max"]
-                        mean_value = stats["mean"]
-
-    # Attach stats safely
+    # -----------------------------------------------------
+    # Attach stats
+    # -----------------------------------------------------
     if min_value is not None:
         column_profile["min"] = str(min_value)
 
@@ -228,14 +278,14 @@ for field in df.schema.fields:
         "file_id": file_id,
         "file_path": file_path,
         "name": col_name,
-        "type": col_type,
+        "type": column_profile["data_type"],
         "nullable": nullable,
         "sample_values": [],
         "description": None
     })
 
 # ---------------------------------------------------------
-# Final Schema Object
+# Schema object
 # ---------------------------------------------------------
 schema = {
     "file_id": file_id,
@@ -249,7 +299,7 @@ schema = {
 }
 
 # ---------------------------------------------------------
-# Output (single line for backend parsing)
+# Output
 # ---------------------------------------------------------
 print("INAAS_SCHEMA_JSON=" + json.dumps(schema))
 print("INAAS_PROFILING=" + json.dumps(profiling))
