@@ -11,7 +11,7 @@ import { ArrowLeft, Database, BarChart3, ChevronDown, TableIcon, Sparkles, User,
 import { useRouter } from "next/navigation";
 import { useState, useEffect, ReactNode, useRef } from "react";
 import { apiService } from "@/services/apiService";
-import DeepExplorerInsight from "@/components/DeepExplorer";
+import DeepExplorerInsight, { ResponseEntry } from "@/components/DeepExplorer";
 
 interface ColumnProfile {
   column_name: string;
@@ -85,6 +85,7 @@ export default function ExplorationTaskDetail() {
   const [data, setData] = useState<ProfilingResponse | null>(null);
   const [uploadData, setUploadData] = useState<ProfileUploadResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [responses, setResponses] = useState<ResponseEntry[]>([]);
 
   const fetchedRef = useRef(false);
 
@@ -502,7 +503,8 @@ export default function ExplorationTaskDetail() {
           <TabsContent value="deep-exploration">
 
             <Card>
-              <DeepExplorerInsight dataset_id={data.dataset_id} />
+              <DeepExplorerInsight dataset_id={data.dataset_id}
+                responses={responses} setResponses={setResponses} />
             </Card>
 
           </TabsContent>
