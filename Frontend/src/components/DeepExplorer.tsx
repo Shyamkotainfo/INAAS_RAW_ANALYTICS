@@ -7,6 +7,7 @@ import React, {
     useRef,
     useEffect,
     useCallback,
+    Dispatch,
 } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -53,7 +54,7 @@ import type { ChatResponse, ChartData, MetricBlock } from "@/config/api";
 
 type ChartType = ChartData["type"] | "table";
 
-interface ResponseEntry {
+export interface ResponseEntry {
     id: string;
     rawData: unknown[];
     chartType: ChartType;
@@ -117,8 +118,12 @@ const MAX_IN_MEMORY_RESPONSES = 15;
    ======================================================================= */
 interface DeepExplorerInsight {
     dataset_id: string;
+    responses: ResponseEntry[],
+    setResponses: Dispatch<React.SetStateAction<ResponseEntry[]>>,
+
+
 }
-export default function DeepExplorerInsight({ dataset_id }: DeepExplorerInsight) {
+export default function DeepExplorerInsight({ dataset_id, responses, setResponses }: DeepExplorerInsight) {
 
     /* -------------------------
        Basic UI state (existing)
@@ -127,7 +132,7 @@ export default function DeepExplorerInsight({ dataset_id }: DeepExplorerInsight)
     /* -------------------------
        Response state + additions
        ------------------------- */
-    const [responses, setResponses] = useState<ResponseEntry[]>([]);
+    // const [responses, setResponses] = useState<ResponseEntry[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
     // ChatInterface parity states (added but UI unchanged)
