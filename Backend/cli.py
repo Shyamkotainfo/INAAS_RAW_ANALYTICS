@@ -1,4 +1,5 @@
 from core.query_orchestrator import QueryOrchestrator
+from analytics.dataset_overview_generator import DatasetOverviewGenerator
 import json
 import uuid
 from config.settings import settings
@@ -6,16 +7,21 @@ from config.settings import settings
 
 def detect_format(path: str):
     path = path.lower()
+
     if path.endswith(".csv"):
         return "csv"
+
     if path.endswith(".parquet"):
         return "parquet"
+
     if path.endswith(".json"):
         return "json"
+
     raise ValueError("Unsupported format")
 
 
 def main():
+
     print("\n" + "=" * 60)
     print("INAAS - RAW Mode (CLI)")
     print("=" * 60)
@@ -27,12 +33,14 @@ def main():
     print("=" * 60)
 
     orchestrator = QueryOrchestrator()
+    overview_generator = DatasetOverviewGenerator()
 
-    # 🔥 Define your volume base here
     VOLUME_BASE = settings.databricks_volume_base
 
     while True:
+
         try:
+
             user_input = input("\n> ").strip()
 
             if not user_input:
@@ -46,10 +54,12 @@ def main():
             # Upload Command
             # ----------------------------------
             if user_input.startswith("upload "):
+
                 parts = user_input.split(" ", 2)
 
                 if len(parts) < 3:
-                    print("Invalid command. Use:")
+                    print("Invalid command.")
+                    print("Use:")
                     print("  upload local <file_path>")
                     print("  upload url <volume_path>")
                     continue
@@ -60,7 +70,7 @@ def main():
                 file_id = f"cli_{uuid.uuid4().hex[:6]}"
 
                 # ------------------------------------------
-                # OPTION 1: Local Upload → Volume
+                # Local file upload
                 # ------------------------------------------
                 if mode == "local":
 
@@ -76,7 +86,7 @@ def main():
                     print(f"Uploaded to: {volume_path}")
 
                 # ------------------------------------------
-                # OPTION 2: Direct Volume Path
+                # Volume path
                 # ------------------------------------------
                 elif mode == "url":
 
@@ -87,15 +97,30 @@ def main():
                     print("Invalid mode. Use 'local' or 'url'")
                     continue
 
-                # 🔥 Common Attach Logic
+                # ------------------------------------------
+                # Run profiling
+                # ------------------------------------------
                 profiling = orchestrator.attach_file(
                     file_id=file_id,
                     file_path=volume_path,
                     file_format=file_format
                 )
 
-                print("\nFile uploaded and profiled successfully.")
-                print(json.dumps(profiling, indent=2))
+                # ------------------------------------------
+                # Generate dataset overview (LLM)
+                # ------------------------------------------
+                overview = overview_generator.generate(profiling)
+
+                print("\nFile uploaded and profiled successfully.\n")
+
+                result = {
+                    "dataset_id": file_id,
+                    "overview": overview,
+                    "profiling": profiling
+                }
+
+                print(json.dumps(result, indent=2))
+
                 continue
 
             # ----------------------------------
