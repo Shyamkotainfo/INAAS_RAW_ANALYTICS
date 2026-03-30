@@ -939,6 +939,54 @@ class ApiService {
       };
     }
   }
+  async postDataAnalysis(
+    payload: unknown
+  ) {
+    try {
+      const response = await fetch('https://dspm4zcmke.us-east-1.awsapprunner.com/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+
+      const data = await response.json();
+
+      // 
+
+      return data; // should match ProfilingResponse
+    } catch (error) {
+      console.error("Profiling API Error:", error);
+      return {
+        success: false,
+        error: "Failed to fetch profiling data",
+      };
+    }
+  }
+  async postDataGenerate(
+    payload: unknown
+  ) {
+    try {
+      const response = await fetch('https://dspm4zcmke.us-east-1.awsapprunner.com/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+
+      const data = await response.json();
+
+      // 
+
+      return data; // should match ProfilingResponse
+    } catch (error) {
+      console.error("Profiling API Error:", error);
+      return {
+        success: false,
+        error: "Failed to fetch profiling data",
+      };
+    }
+  }
   // Method to cancel current request
   cancelRequest(): void {
     if (this.abortController) {
