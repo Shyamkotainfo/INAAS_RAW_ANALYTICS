@@ -83,7 +83,7 @@ const productSubmenus: Record<string, { name: string; path: string; hasSubmenu?:
   ],
   "/misc-tools": [
     { name: "Data Profiler", path: "/misc-tools/data-profiler" },
-    // { name: "Data Synthesizer", path: "/misc-tools/data-synthesizer" },
+    { name: "Data Synthesizer", path: "/misc-tools/data-synthesizer" },
   ],
 };
 
