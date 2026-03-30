@@ -25,7 +25,6 @@ import {
   FileSpreadsheet,
   FileText,
   Database,
-  Copy,
   Settings2,
   FolderOpen,
   Upload,
@@ -107,12 +106,7 @@ interface HistoryEntry {
   schema: { name: string; type: string; distribution: string }[];
 }
 
-const initialHistory: HistoryEntry[] = [
-  { id: "h1", rowCount: 50000, location: "s3://data-lake/synth/customers_v3.csv", format: "CSV", createdAt: "2025-02-14 14:32", schema: [{ name: "id", type: "UUID", distribution: "Uniform" }, { name: "email", type: "Email", distribution: "Uniform" }, { name: "amount", type: "Float", distribution: "Normal" }, { name: "status", type: "Enum", distribution: "Uniform" }] },
-  { id: "h2", rowCount: 25000, location: "s3://data-lake/synth/customers_v2.csv", format: "CSV", createdAt: "2025-02-10 09:15", schema: [{ name: "id", type: "UUID", distribution: "Uniform" }, { name: "name", type: "Name", distribution: "Uniform" }, { name: "revenue", type: "Float", distribution: "Skewed Right" }] },
-  { id: "h3", rowCount: 100000, location: "gs://analytics/synth/transactions.parquet", format: "Parquet", createdAt: "2025-02-05 17:48", schema: [{ name: "txn_id", type: "UUID", distribution: "Uniform" }, { name: "amount", type: "Float", distribution: "Exponential" }, { name: "ts", type: "Datetime", distribution: "Uniform" }, { name: "category", type: "Enum", distribution: "Uniform" }, { name: "region", type: "String", distribution: "Uniform" }] },
-  { id: "h4", rowCount: 10000, location: "/data/output/users_test.json", format: "JSON", createdAt: "2025-01-28 11:20", schema: [{ name: "user_id", type: "Integer", distribution: "Uniform" }, { name: "email", type: "Email", distribution: "Uniform" }] },
-];
+
 
 export default function DataSynthesizer() {
   const [datasetName, setDatasetName] = useState("");
@@ -272,7 +266,7 @@ export default function DataSynthesizer() {
       // Your existing API call - replace 'YOUR_API_ENDPOINT' with actual endpoint if different
       console.log(payload)
 
-      const response = await apiService.postDataAnalysis(payload)
+      await apiService.postDataAnalysis(payload)
       // if (!response.ok) throw new Error('Generation failed');
 
       setAnalysed(true);
