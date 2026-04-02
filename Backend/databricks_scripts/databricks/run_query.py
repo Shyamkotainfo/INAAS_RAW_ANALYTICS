@@ -59,7 +59,7 @@ if invalid:
 local_vars = {"df": df, "F": F}
 
 try:
-    exec(pyspark_code, {}, local_vars)
+    exec(pyspark_code, local_vars, local_vars)
 except Exception as e:
     print("INAAS_EXECUTION_ERROR")
     print(str(e))

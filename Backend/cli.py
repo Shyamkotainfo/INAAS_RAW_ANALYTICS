@@ -37,6 +37,8 @@ def main():
 
     VOLUME_BASE = settings.databricks_volume_base
 
+    current_dataset_id = None
+
     while True:
 
         try:
@@ -121,12 +123,17 @@ def main():
 
                 print(json.dumps(result, indent=2))
 
+                current_dataset_id = file_id
                 continue
 
             # ----------------------------------
             # Normal Question
             # ----------------------------------
-            response = orchestrator.run(user_input)
+            if not current_dataset_id:
+                print("Please upload a file first.")
+                continue
+
+            response = orchestrator.run(user_input, current_dataset_id)
 
             print("\n========== RESPONSE ==========\n")
             print(json.dumps(response, indent=2))
