@@ -73,7 +73,7 @@ final_df = local_vars["final_df"]
 # --------------------------------------------
 # Serialize results
 # --------------------------------------------
-rows = final_df.limit(100).collect()
+rows = final_df.limit(500).collect()
 columns = final_df.columns
 
 result = {
