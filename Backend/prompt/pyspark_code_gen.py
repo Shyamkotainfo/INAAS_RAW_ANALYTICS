@@ -86,24 +86,25 @@ Strategy:
   - Output schema: column_name | distinct_count | total_rows | is_grain_candidate
 
 --- TYPE 2: DIMENSION DETECTION ---
-Trigger: "what are the dimensions", "what can I slice by", "categorical columns", "grouping columns"
+Trigger: "what are the dimensions", "what can I slice by", "categorical columns", "grouping columns", "only dimensions columns"
 Strategy:
   - Select ONLY DIMENSION columns from AVAILABLE COLUMNS using classification rules above.
   - Skip IDENTIFIER, FREE-TEXT, PERSON IDENTIFIER, REPEATED/HISTORY, and MEASURE columns.
-  - For broad "what are the dimensions" questions, pick the TOP 5 most useful analytical dimensions.
-  - Prefer: gender, status, category, region, country, city, department, segment, channel, date, designation, qualification, employment_type.
-  - For each selected dimension: groupBy → count → withColumn dimension_name → select normalized schema.
-  - Combine all dimension DataFrames using unionByName.
-  - Use short variable names: d1, d2, d3, d4, d5.
-  - Output schema: dimension_name | dimension_value | record_count
+  - Do NOT perform data-level aggregations (like groupBy) to list values unless explicitly asked.
+  - Output a metadata DataFrame listing the dimension columns.
+  - Create static rows by selecting F.lit() from df.limit(1) and combining with unionByName.
+  - Output schema: column_type (always 'DIMENSION') | column_name
+  - Example: d1 = df.limit(1).select(F.lit("DIMENSION").alias("column_type"), F.lit("Gender").alias("column_name"))
 
 --- TYPE 3: MEASURE DETECTION ---
-Trigger: "what are the measures", "what can I aggregate", "numeric columns", "what are the KPIs", "what can I sum"
+Trigger: "what are the measures", "what can I aggregate", "numeric columns", "what are the KPIs", "metric columns"
 Strategy:
   - Select ONLY MEASURE columns from AVAILABLE COLUMNS using classification rules above.
   - Exclude numeric columns that behave like categories (year, month, flag, code, rating band, bucket).
-  - For each measure: compute min, max, avg, stddev, null_count.
-  - Output schema: measure_name | min_val | max_val | avg_val | stddev_val | null_count
+  - Do NOT compute global distributions unless explicitly asked.
+  - Output a metadata DataFrame listing the measure columns.
+  - Create static rows by selecting F.lit() from df.limit(1) and combining with unionByName.
+  - Output schema: column_type (always 'MEASURE') | column_name
 
 --- TYPE 4: TIME DIMENSION DETECTION ---
 Trigger: "what dates", "time period", "date range", "how far back", "when does this data start"

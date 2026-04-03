@@ -63,11 +63,11 @@ class PySparkCodeGenerator:
         columns = ", ".join(c["name"] for c in context["columns"])
         col_count = len(context["columns"])
 
-        # ---- Relevance Guard ----
-        if not self._check_relevance(question, columns):
-            raise IrrelevantQueryError(
-                "The question does not relate to the available dataset columns."
-            )
+        # ---- Relevance Guard (Temporarily Disabled) ----
+        # if not self._check_relevance(question, columns):
+        #     raise IrrelevantQueryError(
+        #         "The question does not relate to the available dataset columns."
+        #     )
 
         prompt = get_pyspark_prompt(columns, question)
         max_tokens = self._get_max_tokens(question, col_count)

@@ -125,17 +125,21 @@ class QueryOrchestrator:
             if execution["status"] == "SUCCESS":
                 result = execution["result"]
 
-                summary = self.summarizer.summarize(
-                    question=user_input,
-                    result=result,
-                    mode="query"
-                )
+                # Run both LLM insights and explanation in parallel to minimize latency
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=2) as tpool:
+                    future_summary = tpool.submit(self.summarizer.summarize, user_input, result, "query")
+                    future_explain = tpool.submit(self.summarizer.explain, user_input, result)
+                    
+                    summary = future_summary.result()
+                    text_results = future_explain.result()
 
                 return {
                     "user_input": user_input,
                     "pyspark": last_code,
                     "results": result,
                     "insights": summary,
+                    "text_results": text_results,
                     "attempts": attempt,
                 }
 
