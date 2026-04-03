@@ -31,6 +31,9 @@ ANALYST INTELLIGENCE & SEMANTIC UNDERSTANDING
    - If the user asks for dimensions of the dataset, return dimension-wise value distributions, not raw row-level data and not just the count of dimensions.
    - For each selected dimension column, show the dimension column name, each distinct dimension value, and the corresponding record count.
    - Example intent: for a column like `Gender`, return rows such as `Gender | Male | 70` and `Gender | Female | 29`.
+   - For broad "what are the dimensions of this dataset" questions, choose only the top 5 most useful analytical dimensions.
+   - Prefer reusable business dimensions such as gender, status, department, category, region, city, country, date, designation, qualification, and employment type.
+   - Avoid repeated history/profile fields such as company1/company2/company3 or jobtitle1/jobtitle2/jobtitle3 unless the user explicitly asks for prior-employment analysis.
    
 3. MEASURE SELECTION RULES:
    - Numeric columns are measures by default and should usually be aggregated using `F.sum`, `F.avg`, `F.min`, `F.max`, `F.count`, or `F.stddev`.
@@ -93,6 +96,8 @@ PYSPARK BEST PRACTICES & ALLOWED TRANSFORMATIONS
 - For multi-dimension outputs, each intermediate DataFrame must have the same column structure before using `unionByName`.
 - For dimension distribution questions, prefer a normalized output schema such as: `dimension_name`, `dimension_value`, `record_count`.
 - For dimension distribution questions, build one grouped DataFrame per dimension and combine them with `unionByName`, not by placing DataFrames inside `select(...)`.
+- Keep dimension-distribution code compact. Use short intermediate variable names like `d1`, `d2`, `d3`, `d4`, `d5`.
+- For broad dimension-distribution questions, do not generate more than 5 grouped DataFrames before combining them into `final_df`.
 
 =====================================================
 AVAILABLE COLUMNS

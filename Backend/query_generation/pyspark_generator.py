@@ -15,9 +15,10 @@ class PySparkCodeGenerator:
 
         columns = ", ".join(c["name"] for c in context["columns"])
         prompt = get_pyspark_prompt(columns, question)
+        max_tokens = self._get_max_tokens(question)
 
         logger.info("Sending PySpark generation prompt to LLM")
-        code = self.llm.generate(prompt).strip()
+        code = self.llm.generate(prompt, max_tokens=max_tokens).strip()
         logger.info("Received PySpark code from LLM")
 
         print("\n========== GENERATED PYSPARK ==========\n")
@@ -34,6 +35,12 @@ class PySparkCodeGenerator:
             raise RuntimeError("crossJoin is not allowed")
 
         return code
+
+    def _get_max_tokens(self, question: str) -> int:
+        lowered = question.lower()
+        if "dimension" in lowered:
+            return 1600
+        return 1000
 
 
     def _sanitize(self, code: str) -> str:
