@@ -88,13 +88,50 @@ class DatabricksExecutor:
             }
         }
 
-        stdout = self._submit_and_get_logs(payload)
+        # Capture stdout without raising — return structured result so
+        # the orchestrator retry loop can handle failures gracefully.
+        try:
+            stdout = self._submit_and_get_logs(payload)
+        except RuntimeError as e:
+            return {
+                "status": "FAILED",
+                "result": None,
+                "error": str(e),
+                "raw_stdout": ""
+            }
 
-        result = self._extract_query_result(stdout)
+        # Check for an execution error marker in the logs
+        if "INAAS_EXECUTION_ERROR" in stdout:
+            error_lines = []
+            capture = False
+            for line in stdout.splitlines():
+                if "INAAS_EXECUTION_ERROR" in line:
+                    capture = True
+                    continue
+                if capture:
+                    error_lines.append(line)
+            return {
+                "status": "FAILED",
+                "result": None,
+                "error": "\n".join(error_lines).strip() or "Unknown execution error",
+                "raw_stdout": stdout
+            }
+
+        try:
+            result = self._extract_query_result(stdout)
+        except RuntimeError as e:
+            return {
+                "status": "FAILED",
+                "result": None,
+                "error": str(e),
+                "raw_stdout": stdout
+            }
 
         return {
             "status": "SUCCESS",
-            "result": result
+            "result": result,
+            "error": None,
+            "raw_stdout": stdout
         }
 
     # =====================================================

@@ -136,6 +136,20 @@ def main():
             response = orchestrator.run(user_input, current_dataset_id)
 
             print("\n========== RESPONSE ==========\n")
+
+            # Irrelevant query
+            if response.get("irrelevant"):
+                print("⚠️  " + response.get("message", "Question not related to the dataset."))
+                continue
+
+            # Persistent execution failure
+            if response.get("error") and not response.get("results"):
+                print("❌  Query failed after all retries.")
+                print(f"    Error   : {response['error']}")
+                print(f"    Query   :\n{response.get('query', '')}")
+                continue
+
+            # Successful result
             print(json.dumps(response, indent=2))
 
         except Exception as e:

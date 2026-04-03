@@ -23,7 +23,12 @@ MODE A — META / STRUCTURAL (triggered by phrases like):
   "what is the grain", "what columns do I have", "profile this dataset", "give me an overview",
   "what kind of dataset is this", "what are the date columns", "time range", "data quality",
   "are there nulls", "duplicates", "what can I join", "foreign keys", "summarize the schema",
-  "what is in this dataset", "what can I slice by", "what can I aggregate"
+  "what is in this dataset", "what can I slice by", "what can I aggregate",
+  "what hierarchies exist", "country state city", "parent child", "is there a hierarchy", "drill down",
+  "is this raw", "level of aggregation", "granularity", "is this summarized", "rolled up",
+  "gaps in time", "missing days", "missing weeks", "are there gaps", "time coverage", "continuity",
+  "what kpis", "what metrics can i derive", "business metrics", "primary business outcome",
+  "what can i measure", "which column is the key metric", "what can I build a dashboard from"
 
 MODE B — ANALYTICAL (everything else):
   Aggregations, trends, filters, top-N, distributions, comparisons, cohorts, anomalies.
@@ -152,6 +157,58 @@ Strategy:
   - Use the COLUMN CLASSIFICATION RULES above to assign each column a role.
   - For each column also compute: null_count, approxCountDistinct.
   - Output schema: column_name | classification | data_role_reason | null_count | distinct_count
+
+--- TYPE 9: HIERARCHY DETECTION ---
+Trigger: "what hierarchies exist", "country state city", "parent child", "is there a hierarchy", "drill down"
+Strategy:
+  - Scan AVAILABLE COLUMNS for columns that form geographic or organizational cascades:
+      Geographic: continent, country, region, state, city, district, zip, postal_code
+      Organizational: company, division, department, team, sub_team
+      Product: category, sub_category, product_group, product_name, sku
+      Time: year, quarter, month, week, day
+  - For each detected hierarchy, compute the count of distinct values at EACH level using approxCountDistinct.
+  - Arrange levels from lowest cardinality (highest level) to highest cardinality (lowest level).
+  - Output a single DataFrame describing the hierarchy levels:
+  - Output schema: hierarchy_name | level_order | column_name | approx_distinct_values
+  - Use F.lit() to build static column labels. Combine levels with unionByName.
+
+--- TYPE 10: AGGREGATION LEVEL DETECTION ---
+Trigger: "is this raw", "level of aggregation", "granularity", "is this summarized", "rolled up or transactional"
+Strategy:
+  - Identify the most likely grain/key column using approxCountDistinct vs row count (as in TYPE 1).
+  - If the best unique-ratio column approaches 1.0 → likely RAW / transactional.
+  - If no column approaches uniqueness and multiple numeric columns exist → likely PRE-AGGREGATED / rolled up.
+  - Also check for presence of columns like total_, sum_, avg_, count_ as hints of aggregation.
+  - Output: a single-row DataFrame with:
+    inferred_level (RAW_TRANSACTIONAL | PRE_AGGREGATED | UNKNOWN) | confidence_reason | grain_column | row_count
+  - Use F.lit() and df.select(F.count("*")) to build this output.
+
+--- TYPE 11: TIME GAP / COVERAGE ANALYSIS ---
+Trigger: "gaps in time", "missing days", "missing weeks", "are there gaps", "time coverage", "continuity"
+Strategy:
+  - Identify all date or timestamp columns in AVAILABLE COLUMNS by name pattern:
+      contains: date, time, created, updated, joined, modified, period, month, year, day, timestamp.
+  - For the primary time column (lowest in the name pattern priority list):
+      a. Cast to date using F.to_date() if stored as string.
+      b. Compute min_date, max_date, and approxCountDistinct of the date column.
+      c. Compute expected_days = datediff(max_date, min_date) + 1.
+      d. actual_distinct_days = approxCountDistinct result.
+      e. gap_count = expected_days - actual_distinct_days.
+  - Output schema: time_column | min_date | max_date | expected_days | actual_distinct_days | gap_count | has_gaps
+  - has_gaps = gap_count > 0.
+  - Use F.datediff, F.min, F.max, F.approx_count_distinct, F.lit, F.when for this.
+
+--- TYPE 12: KPI DERIVATION SUGGESTIONS ---
+Trigger: "what kpis", "what metrics can i derive", "business metrics", "primary business outcome", "what can i measure"
+Strategy:
+  - From AVAILABLE COLUMNS, identify MEASURE columns using classification rules (TYPE 3 rules).
+  - For each MEASURE column: compute min, max, avg, sum (if numeric), stddev.
+  - Also identify good DIMENSION columns for slicing.
+  - Suggest derived KPIs by combining measures with standard aggregation patterns:
+      total_ → F.sum | average_ → F.avg | rate_ → F.count with filter / total count
+  - Output: for each measure, show its min/max/avg/sum and flag it as a candidate KPI.
+  - Output schema: kpi_candidate | source_column | min_val | max_val | avg_val | sum_val | suggested_aggregation
+  - Use F.lit() to add the suggested_aggregation label (e.g. "SUM", "AVG", "COUNT", "RATIO").
 
 =====================================================
 MODE B — ANALYTICAL INTELLIGENCE
