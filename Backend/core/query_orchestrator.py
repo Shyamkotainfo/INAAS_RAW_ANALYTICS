@@ -109,6 +109,7 @@ class QueryOrchestrator:
                 "pyspark": None,
                 "results": None,
                 "insights": None,
+                "text_results": None,
             }
 
         # --------------------------------------------------
@@ -183,5 +184,6 @@ class QueryOrchestrator:
             "pyspark": last_code,
             "results": None,
             "insights": None,
+            "text_results": None,
             "attempts": MAX_RETRIES,
         }

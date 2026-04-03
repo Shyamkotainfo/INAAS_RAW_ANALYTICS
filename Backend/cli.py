@@ -145,9 +145,8 @@ def main():
             # Persistent execution failure
             if response.get("error") and not response.get("results"):
                 print("❌  Query failed after all retries.")
-                print(f"    Error   : {response['error']}")
-                print(f"    Query   :\n{response.get('query', '')}")
-                continue
+                # We do not continue here; we let it fall through 
+                # so the structured JSON gets printed below.
 
             # Successful result
             print(json.dumps(response, indent=2))
