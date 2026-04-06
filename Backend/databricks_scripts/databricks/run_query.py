@@ -45,18 +45,15 @@ else:
     raise ValueError(f"Unsupported format: {file_format}")
 
 # --------------------------------------------
-# Validate column usage
-# --------------------------------------------
-used_columns = re.findall(r'F\.col\("([^"]+)"\)', pyspark_code)
-invalid = [c for c in used_columns if c not in df.columns]
-
-if invalid:
-    raise RuntimeError(f"Invalid columns referenced: {invalid}")
-
-# --------------------------------------------
 # Execute generated PySpark
 # --------------------------------------------
-local_vars = {"df": df, "F": F}
+# NOTE: column validation is intentionally NOT done here.
+# The generated code operates on multiple DataFrames (df, intermediate
+# aliased frames, etc.). Checking F.col() references only against df.columns
+# produces false positives for fully valid derived columns.
+# Spark raises a clear AnalysisException for genuine missing-column errors,
+# which is caught below and surfaced via INAAS_EXECUTION_ERROR.
+local_vars = {"df": df, "F": F, "Window": Window}
 
 try:
     exec(pyspark_code, local_vars, local_vars)

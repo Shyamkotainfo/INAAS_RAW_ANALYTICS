@@ -68,6 +68,49 @@ class ResultSummarizer:
         )
 
     # -----------------------------------------------------
+    # TEXTUAL EXPLANATION (Paragraph format)
+    # -----------------------------------------------------
+    def explain(self, question: str, result, max_rows: int = 5) -> str:
+        """Generates a plain-text paragraph explanation of the results."""
+        if not result or "rows" not in result or not result["rows"]:
+            return "No data available to explain."
+
+        headers = result.get("columns", [])
+        rows = result.get("rows", [])
+        rows = rows[:max_rows]
+
+        structured_rows = [
+            dict(zip(headers, row))
+            for row in rows
+        ]
+
+        data_text = f"(Columns: {headers}, Rows: {structured_rows})"
+
+        prompt = f"""
+            You are a Data Communications Expert.
+
+            Provide a clear, natural language explanation connecting the USER QUESTION to the returned DATA.
+            
+            INSTRUCTIONS:
+            - Write 1-2 short, readable paragraphs (plain text, no bullet points).
+            - Explain the results in plain English, answering the user's question directly based ONLY on the data provided.
+            - Do NOT mention Spark, PySpark, databases, or the technical backend.
+            - Do not hallucinate data; if the data is limited, just explain what is visible.
+
+            USER QUESTION:
+            {question}
+
+            DATA:
+            {data_text}
+            """
+
+        return invoke_llm(
+            prompt=prompt,
+            temperature=0.2,
+            max_tokens=400
+        )
+
+    # -----------------------------------------------------
     # PROFILING MODE SUMMARY
     # -----------------------------------------------------
     def _summarize_profiling(self, profiling_result) -> str:

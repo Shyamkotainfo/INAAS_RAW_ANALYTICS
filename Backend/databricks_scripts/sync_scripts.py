@@ -36,13 +36,17 @@ def sync_file(local_path, target_path):
 if __name__ == "__main__":
     print("Starting Databricks Script Sync...")
     print("-" * 50)
-    
+
     # 1. Sync run_query.py
     sync_file(
         local_path="databricks_scripts/databricks/run_query.py",
         target_path="/Volumes/inaas_dev/raw_analytics/raw_data/jobs/run_query.py"
     )
-    
-    # You can add more scripts to sync here in the future
-    
+
+    # 2. Sync ingest_and_profile.py
+    sync_file(
+        local_path="databricks_scripts/databricks/ingest_and_profile.py",
+        target_path="/Volumes/inaas_dev/raw_analytics/raw_data/jobs/ingest_and_profile.py"
+    )
+
     print("Sync complete!")

@@ -145,11 +145,16 @@ def run_query(request: QueryRequest):
             dataset_id=request.dataset_id
         )
 
+        # Check if the orchestrator returned a known failure marker
+        is_success = not response.get("error") and not response.get("irrelevant")
+
+        # Always return 200 — the response dict carries structured
+        # status (irrelevant, error, or full result) for the frontend to handle.
         return {
-            "success": True,
+            "success": is_success,
             "data": response
         }
 
     except Exception as e:
-        logger.exception("Query failed")
+        logger.exception("Query failed with unexpected error")
         raise HTTPException(status_code=500, detail=str(e))
