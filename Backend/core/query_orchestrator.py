@@ -1,77 +1,189 @@
 # Backend/core/query_orchestrator.py
 
-from rag.kb_retriever import KnowledgeBaseRetriever
-from rag.context_builder import build_query_context
-from query_generation.pyspark_generator import PySparkCodeGenerator
-from execution.executor_factory import get_executor
+from logger.logger import get_logger
+from execution.databricks_executor import DatabricksExecutor
+from ingestion.metadata_uploader import MetadataUploader
+from rag.bedrock_ingestor import trigger_bedrock_ingestion
+from config.settings import settings
+from query_generation.pyspark_generator import PySparkCodeGenerator, IrrelevantQueryError
 from summarization.result_summarizer import ResultSummarizer
-from profiling.dataframe_profiler import DataFrameProfiler
-from quality.quality_engine import run_quality_checks
+
+logger = get_logger(__name__)
+
+MAX_RETRIES = 3
 
 
 class QueryOrchestrator:
+
     def __init__(self):
-        self.retriever = KnowledgeBaseRetriever()
+        self.executor = DatabricksExecutor()
         self.codegen = PySparkCodeGenerator()
-        self.executor = get_executor()   # 🔥 INFRA SWITCH POINT
         self.summarizer = ResultSummarizer()
+        self.active_file = None
 
-    def run(self, question: str):
+    # =====================================================
+    # FILE INGESTION
+    # =====================================================
+    def attach_file(self, file_id: str, file_path: str, file_format: str):
 
-        question = question.strip()
+        logger.info("Starting ingestion for file: %s", file_path)
 
-        # -------------------------------------------
-        # STEP 1: Retrieve schema / file context
-        # -------------------------------------------
-        chunks = self.retriever.retrieve(question)
-        context = build_query_context(chunks)
+        # ----------------------------
+        # Databricks profiling
+        # ----------------------------
+        ingestion = self.executor.ingest_and_profile(
+            file_id=file_id,
+            file_path=file_path,
+            file_format=file_format
+        )
 
-        if not context.get("file_id"):
-            raise RuntimeError("File path could not be resolved from KB RAG")
+        if ingestion["status"] != "SUCCESS":
+            raise RuntimeError("Ingestion failed")
 
-        file_id = context["file_id"]
+        schema = ingestion["schema"]
+        profiling = ingestion["profiling"]
 
-        # -------------------------------------------
-        # STEP 2: PROFILE MODE (@profile)
-        # -------------------------------------------
-        if question.lower().startswith("@profile"):
+        # ----------------------------
+        # Upload schema to S3
+        # ----------------------------
+        uploader = MetadataUploader()
+        uploader.upload(schema, file_id)
 
-            df = self.executor.load_df(file_id)
-            profile = DataFrameProfiler(df).run()
-            summary = self.summarizer.summarize_profile(profile)
+        # ----------------------------
+        # Trigger Bedrock ingestion (SAFE — non-blocking)
+        # ----------------------------
+        try:
+            ingestion_status = trigger_bedrock_ingestion(
+                bucket=settings.s3_bucket,
+                prefix="schema/"
+            )
+            logger.info("Bedrock ingestion trigger response: %s", ingestion_status)
+        except Exception as e:
+            logger.warning(
+                "Bedrock ingestion failed but profiling succeeded: %s", str(e)
+            )
 
+        logger.info("Schema uploaded to S3 and ingestion process handled")
+
+        # ----------------------------
+        # Store active file in memory
+        # ----------------------------
+        self.active_file = {
+            "file_id": file_id,
+            "file_path": file_path,
+            "format": file_format,
+            "columns": schema["columns"]
+        }
+
+        return profiling
+
+    # =====================================================
+    # QUERY EXECUTION  (with retry + correction loop)
+    # =====================================================
+    def run(self, user_input: str, dataset_id: str) -> dict:
+
+        if not self.active_file or self.active_file["file_id"] != dataset_id:
+            raise RuntimeError("Dataset not loaded. Please run profiling first.")
+
+        context = {
+            "file_path": self.active_file["file_path"],
+            "format": self.active_file["format"],
+            "columns": self.active_file["columns"]
+        }
+
+        # --------------------------------------------------
+        # Step 1 — Relevance guard + initial code generation
+        # --------------------------------------------------
+        try:
+            pyspark_code = self.codegen.generate(user_input, context)
+        except IrrelevantQueryError as e:
+            logger.info("Irrelevant query blocked: %s", str(e))
             return {
-                "mode": "profile",
-                "file_id": file_id,
-                "profile": profile,
-                "summary": summary
+                "user_input": user_input,
+                "irrelevant": True,
+                "message": (
+                    "This question does not appear to relate to the loaded dataset. "
+                    "Please ask something about the data — its structure, quality, "
+                    "trends, distributions, or business metrics."
+                ),
+                "pyspark": None,
+                "results": None,
+                "insights": None,
+                "text_results": None,
             }
 
-        # -------------------------------------------
-        # STEP 3: QUALITY MODE (@quality)
-        # -------------------------------------------
-        if question.lower().startswith("@quality"):
+        # --------------------------------------------------
+        # Step 2 — Execute with up to MAX_RETRIES correction attempts
+        # --------------------------------------------------
+        last_error = None
+        last_code = pyspark_code
 
-            df = self.executor.load_df(file_id)
-            quality_report = run_quality_checks(df)
-            summary = self.summarizer.summarize_profile(quality_report)
+        for attempt in range(1, MAX_RETRIES + 1):
+            logger.info("Execution attempt %d / %d", attempt, MAX_RETRIES)
 
-            return {
-                "mode": "quality",
-                "file_id": file_id,
-                "quality": quality_report,
-                "summary": summary
-            }
+            execution = self.executor.execute_query(context, last_code)
 
-        # -------------------------------------------
-        # STEP 4: NORMAL QUERY MODE
-        # -------------------------------------------
-        pyspark_code = self.codegen.generate(question, context)
-        rows = self.executor.execute_query(file_id, pyspark_code)
+            if execution["status"] == "SUCCESS":
+                result = execution["result"]
+
+                # Run both LLM insights and explanation in parallel to minimize latency
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=2) as tpool:
+                    future_summary = tpool.submit(self.summarizer.summarize, user_input, result, "query")
+                    future_explain = tpool.submit(self.summarizer.explain, user_input, result)
+                    
+                    summary = future_summary.result()
+                    text_results = future_explain.result()
+
+                return {
+                    "user_input": user_input,
+                    "pyspark": last_code,
+                    "results": result,
+                    "insights": summary,
+                    "text_results": text_results,
+                    "attempts": attempt,
+                }
+
+            # FAILED — capture error and try to correct
+            last_error = execution.get("error", "Unknown execution error")
+
+            logger.warning(
+                "Execution attempt %d failed: %s", attempt, last_error
+            )
+
+            if attempt < MAX_RETRIES:
+                logger.info("Requesting LLM correction for attempt %d", attempt + 1)
+                try:
+                    corrected_code = self.codegen.correct(
+                        question=user_input,
+                        context=context,
+                        failing_code=last_code,
+                        error_message=last_error
+                    )
+                    last_code = corrected_code
+                except RuntimeError as e:
+                    logger.warning(
+                        "LLM correction produced invalid code on attempt %d: %s",
+                        attempt, str(e)
+                    )
+                    # Keep last_code unchanged — try again with same code is pointless,
+                    # but we break to avoid infinite correction loops on structural failures
+                    break
+
+        # --------------------------------------------------
+        # Step 3 — All retries exhausted
+        # --------------------------------------------------
+        logger.error(
+            "All %d execution attempts exhausted. Last error: %s", MAX_RETRIES, last_error
+        )
 
         return {
-            "mode": "query",
-            "pyspark_code": pyspark_code,
-            "result": rows,
-            "summary": self.summarizer.summarize(question, rows[:10])
+            "user_input": user_input,
+            "error": last_error,
+            "query": last_code,
+            "pyspark": last_code,
+            "results": None,
+            "insights": None,
+            "text_results": None,
+            "attempts": MAX_RETRIES,
         }

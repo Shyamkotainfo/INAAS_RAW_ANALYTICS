@@ -1,5 +1,3 @@
-# Backend/rag/kb_retriever.py
-
 import boto3
 from config.settings import settings
 from logger.logger import get_logger
@@ -20,8 +18,7 @@ class KnowledgeBaseRetriever:
             retrievalQuery={"text": question},
             retrievalConfiguration={
                 "vectorSearchConfiguration": {
-                    "numberOfResults": top_k
-                }
+                    "numberOfResults": top_k}
             }
         )
 
@@ -30,5 +27,5 @@ class KnowledgeBaseRetriever:
             for item in response.get("retrievalResults", [])
         ]
 
-        logger.info(f"Retrieved {len(chunks)} KB chunks")
+        logger.info("Retrieved %d KB chunks", len(chunks))
         return chunks

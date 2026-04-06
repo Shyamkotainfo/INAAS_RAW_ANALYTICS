@@ -8,12 +8,9 @@ logger = get_logger(__name__)
 
 
 def get_llm_client(region: Optional[str] = None):
-    """
-    Create a Bedrock runtime client.
-    """
     return boto3.client(
         service_name="bedrock-runtime",
-        region_name="us-east-1"
+        region_name=region or settings.aws_region
     )
 
 
@@ -23,10 +20,6 @@ def invoke_llm(
     temperature: float = 0.0,
     max_tokens: int = 800,
 ) -> str:
-    """
-    Invoke Amazon Bedrock Nova Pro and return raw text output.
-    """
-
     model_id = model_id or settings.bedrock_model
     client = get_llm_client()
 
@@ -40,7 +33,7 @@ def invoke_llm(
             "messages": [
                 {
                     "role": "user",
-                    "content": [{ "text": prompt }]
+                    "content": [{"text": prompt}]
                 }
             ],
             "inferenceConfig": {
@@ -53,3 +46,22 @@ def invoke_llm(
 
     payload = json.loads(response["body"].read())
     return payload["output"]["message"]["content"][0]["text"]
+
+
+# ✅ REQUIRED CLASS (this is what was missing)
+class LLMQuery:
+    def __init__(self):
+        self.model_id = settings.bedrock_model
+
+    def generate(
+        self,
+        prompt: str,
+        temperature: float = 0.0,
+        max_tokens: int = 800,
+    ) -> str:
+        return invoke_llm(
+            prompt=prompt,
+            model_id=self.model_id,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
