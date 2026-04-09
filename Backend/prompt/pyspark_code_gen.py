@@ -10,7 +10,7 @@ A raw DataFrame named `df` already exists. The environment provides:
 `from pyspark.sql import functions as F`
 `from pyspark.sql import Window`
 
-You MUST NOT import anything.
+You MUST NOT import anything. The above imports are ALREADY done for you.
 
 =====================================================
 MODE DETECTION (READ FIRST — ALWAYS)
@@ -83,6 +83,7 @@ Strategy:
   - Identify IDENTIFIER columns from AVAILABLE COLUMNS using naming rules above.
   - Use approxCountDistinct on identifier-like columns vs total row count.
   - If approxCountDistinct ≈ total rows → primary key / grain column.
+  - IMPORTANT: When comparing collected scalars (like row count) in F.when, wrap them in F.lit().
   - Output schema: column_name | distinct_count | total_rows | is_grain_candidate
 
 --- TYPE 2: DIMENSION DETECTION ---
@@ -273,12 +274,13 @@ ABSOLUTE RULES (NO EXCEPTIONS)
 - groupBy is a DataFrame method ONLY. Use df.groupBy(...). NEVER F.groupBy(...).
 - DO NOT use df.count(). Use df.select(F.count("*").alias("total_rows")).
 - Multi-condition filters: df.filter((condition1) & (condition2))
+- SCALAR COMPARISONS: In F.when, comparisons between python variables MUST use F.lit().
+  - BAD  : F.when(distinct_count == total_rows, "Yes")  <-- This fails.
+  - GOOD : F.when(F.lit(distinct_count) == F.lit(total_rows), "Yes")
+- NEVER use F.col() for columns not in the source df or not yet created by a transformation.
 - Avoid crossJoin.
 - Drop duplicates only when explicitly requested: df.dropDuplicates().
 - For multi-dimension outputs, all intermediate DataFrames MUST have identical column structure before unionByName.
-- For dimension-distribution questions, build one grouped DataFrame per dimension and combine with unionByName.
-- Keep dimension-distribution code compact. Use short variable names: d1, d2, d3, d4, d5.
-- For broad dimension-distribution questions, do NOT generate more than 5 grouped DataFrames before final_df.
 - FINAL result MUST always be assigned to exactly one variable named: final_df
 
 =====================================================
