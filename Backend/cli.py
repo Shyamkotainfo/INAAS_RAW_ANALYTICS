@@ -137,18 +137,26 @@ def main():
 
             print("\n========== RESPONSE ==========\n")
 
+            route = response.get("route", "ADHOC")
+            print(f"🔀  Routed to: [{route}]  (format: {response.get('format_bucket', 'structured')})\n")
+
             # Irrelevant query
             if response.get("irrelevant"):
                 print("⚠️  " + response.get("message", "Question not related to the dataset."))
                 continue
 
+            # Layer 1 / Layer 2 / Layer 3 — plain text answer, no PySpark
+            if response.get("answer") and not response.get("results"):
+                print(response["answer"])
+                continue
+
             # Persistent execution failure
             if response.get("error") and not response.get("results"):
                 print("❌  Query failed after all retries.")
-                # We do not continue here; we let it fall through 
-                # so the structured JSON gets printed below.
+                print(json.dumps(response, indent=2))
+                continue
 
-            # Successful result
+            # Successful ADHOC result — full JSON
             print(json.dumps(response, indent=2))
 
         except Exception as e:
