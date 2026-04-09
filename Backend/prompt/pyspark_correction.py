@@ -24,7 +24,7 @@ The environment provides ONLY:
   from pyspark.sql import functions as F
   from pyspark.sql import Window
 
-You MUST NOT import anything else.
+You MUST NOT import anything else. These are ALREADY imported for you.
 FINAL result MUST be assigned to exactly one variable named: final_df
 
 =====================================================
@@ -82,6 +82,13 @@ CORRECTION RULES
    - ParseException -> syntax error in string expressions
    - IllegalArgumentException -> bad function arguments (e.g. wrong format string)
    - TypeError -> Python-level type mismatch
+   - AnalysisException        → wrong column name, incompatible schema, wrong join key, bad cast
+   - [NOT_COLUMN] error       → Argument `condition` should be a Column, got bool. 
+     (FIX: Wrap python variables or scalars in F.lit() inside F.when)
+   - AttributeError           → method called on wrong object type (e.g. F.groupBy instead of df.groupBy)
+   - ParseException            → syntax error in string expressions
+   - IllegalArgumentException → bad function arguments (e.g. wrong format string)
+   - TypeError                → Python-level type mismatch
 
 2. Fix ONLY the lines causing the error. Do NOT rewrite the entire logic unnecessarily.
 
@@ -93,6 +100,8 @@ CORRECTION RULES
    - NEVER use python loops or list comprehensions.
    - groupBy is a DataFrame method. Use df.groupBy(...). NEVER F.groupBy(...).
    - DO NOT use df.count(). Use df.select(F.count("*").alias("total_rows")).
+   - SCALAR COMPARISONS: In F.when, comparisons between python variables MUST use F.lit().
+   - NEVER use F.col() for columns not in the source df or not yet created by a transformation.
    - For unionByName, all intermediate DataFrames must have identical column structures.
    - Avoid crossJoin.
 
