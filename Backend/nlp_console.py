@@ -179,3 +179,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# python3 nlp_console.py --dataset-id cli_abef6d --file-path "/Volumes/inaas_dev/hr_analytics/employee_data/employee_details.csv" --file-format csv
