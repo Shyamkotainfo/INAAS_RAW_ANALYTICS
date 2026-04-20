@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 from core.query_orchestrator import QueryOrchestrator
 from logger.logger import get_logger
 from config.settings import settings
@@ -38,6 +39,7 @@ class StartProfilingRequest(BaseModel):
     dataset_id: str
     file_path: str
     file_format: str
+    semantic_context: Optional[str] = None
 
 
 class QueryRequest(BaseModel):
@@ -114,7 +116,8 @@ def start_profiling(request: StartProfilingRequest):
         profiling = orchestrator.attach_file(
             file_id=request.dataset_id,
             file_path=request.file_path,
-            file_format=request.file_format
+            file_format=request.file_format,
+            context=request.semantic_context
         )
 
         # Step 2 — Generate overview using LLM

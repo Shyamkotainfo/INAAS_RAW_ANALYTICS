@@ -1,9 +1,9 @@
 #run_query.py
 import sys
 import json
-import re
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
+from pyspark.sql import Window
 
 # --------------------------------------------
 # Parse input
@@ -62,10 +62,12 @@ except Exception as e:
     print(str(e))
     raise
 
-if "final_df" not in local_vars:
+if "final_df" in local_vars:
+    final_df = local_vars["final_df"]
+elif "result_df" in local_vars:
+    final_df = local_vars["result_df"]
+else:
     raise RuntimeError("final_df not produced by generated code")
-
-final_df = local_vars["final_df"]
 
 # --------------------------------------------
 # Serialize results

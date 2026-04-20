@@ -1,6 +1,7 @@
 from core.query_orchestrator import QueryOrchestrator
 from analytics.dataset_overview_generator import DatasetOverviewGenerator
 import json
+import shlex
 import uuid
 from config.settings import settings
 
@@ -26,7 +27,8 @@ def main():
     print("INAAS - RAW Mode (CLI)")
     print("=" * 60)
     print("Commands:")
-    print("  upload local <local_file_path>")
+    print("  upload local <csv_path> <context_json_path>")
+    print("  upload local <local_file_path> [optional_context_json_path]")
     print("  upload url <volume_path>")
     print("  ask natural language question")
     print("  exit")
@@ -57,17 +59,61 @@ def main():
             # ----------------------------------
             if user_input.startswith("upload "):
 
-                parts = user_input.split(" ", 2)
+                try:
+                    parts = shlex.split(user_input, posix=False)
+                except ValueError as e:
+                    print(f"Invalid command syntax: {e}")
+                    print('Wrap paths containing spaces in double quotes.')
+                    continue
 
                 if len(parts) < 3:
                     print("Invalid command.")
                     print("Use:")
-                    print("  upload local <file_path>")
+                    print("  upload local <csv_path> <context_json_path>")
+                    print("  upload local <file_path> [optional_context_json_path]")
                     print("  upload url <volume_path>")
                     continue
 
                 mode = parts[1].lower()
-                path = parts[2].strip()
+                context_str = None
+
+                if mode == "local":
+                    if len(parts) not in {3, 4}:
+                        print("Invalid local upload command.")
+                        print("Use:")
+                        print("  upload local <csv_path> <context_json_path>")
+                        print("  upload local <file_path> [optional_context_json_path]")
+                        print('Wrap paths containing spaces in double quotes.')
+                        continue
+
+                    path = parts[2].strip()
+                    context_path = parts[3].strip() if len(parts) == 4 else None
+
+                    if context_path:
+                        try:
+                            with open(context_path, "r", encoding="utf-8") as f:
+                                context_str = f.read()
+                            print(f"Loaded semantic context from {context_path}")
+                        except Exception as e:
+                            print(f"Failed to load context file: {e}")
+                            continue
+
+                    try:
+                        with open(path, "rb"):
+                            pass
+                    except Exception as e:
+                        print(f"Failed to read local file: {e}")
+                        continue
+
+                elif mode == "url":
+                    if len(parts) != 3:
+                        print("Invalid url upload command.")
+                        print("Use: upload url <volume_path>")
+                        continue
+                    path = parts[2].strip()
+                else:
+                    print("Invalid mode. Use 'local' or 'url'")
+                    continue
 
                 file_id = f"cli_{uuid.uuid4().hex[:6]}"
 
@@ -90,14 +136,10 @@ def main():
                 # ------------------------------------------
                 # Volume path
                 # ------------------------------------------
-                elif mode == "url":
+                else:
 
                     volume_path = path
                     file_format = detect_format(volume_path)
-
-                else:
-                    print("Invalid mode. Use 'local' or 'url'")
-                    continue
 
                 # ------------------------------------------
                 # Run profiling
@@ -105,7 +147,8 @@ def main():
                 profiling = orchestrator.attach_file(
                     file_id=file_id,
                     file_path=volume_path,
-                    file_format=file_format
+                    file_format=file_format,
+                    context=context_str if mode == "local" else None
                 )
 
                 # ------------------------------------------
@@ -137,18 +180,13 @@ def main():
 
             print("\n========== RESPONSE ==========\n")
 
-            # Irrelevant query
             if response.get("irrelevant"):
-                print("⚠️  " + response.get("message", "Question not related to the dataset."))
+                print("Warning: " + response.get("message", "Question not related to the dataset."))
                 continue
 
-            # Persistent execution failure
             if response.get("error") and not response.get("results"):
-                print("❌  Query failed after all retries.")
-                # We do not continue here; we let it fall through 
-                # so the structured JSON gets printed below.
+                print("Query failed after all retries.")
 
-            # Successful result
             print(json.dumps(response, indent=2))
 
         except Exception as e:

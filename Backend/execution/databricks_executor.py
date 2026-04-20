@@ -1,15 +1,25 @@
 import requests
 import time
 import json
+import os
+import base64
 from config.settings import settings
+from pyspark_utils.code_validator import validate_pyspark_code
 
 
 class DatabricksExecutor:
+
+    def __init__(self):
+        self._backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     # =====================================================
     # INGEST + PROFILE
     # =====================================================
     def ingest_and_profile(self, file_id: str, file_path: str, file_format: str):
+        self._ensure_remote_script(
+            settings.databricks_ingest_script,
+            os.path.join(self._backend_root, "databricks_scripts", "databricks", "ingest_and_profile.py")
+        )
 
         job_args = {
             "file_id": file_id,
@@ -72,6 +82,14 @@ class DatabricksExecutor:
     # QUERY EXECUTION
     # =====================================================
     def execute_query(self, context: dict, pyspark_code: str):
+        validate_pyspark_code(
+            pyspark_code,
+            available_columns=[c["name"] for c in context.get("columns", [])]
+        )
+        self._ensure_remote_script(
+            settings.databricks_run_query_script,
+            os.path.join(self._backend_root, "databricks_scripts", "databricks", "run_query.py")
+        )
 
         job_args = {
             "file_path": context["file_path"],
@@ -137,6 +155,48 @@ class DatabricksExecutor:
     # =====================================================
     # INTERNAL HELPERS
     # =====================================================
+
+    def _ensure_remote_script(self, remote_path: str, local_path: str):
+        if not remote_path:
+            return
+
+        if not os.path.exists(local_path):
+            raise RuntimeError(f"Local Databricks script not found: {local_path}")
+
+        if remote_path.startswith("dbfs:/") and not remote_path.startswith("dbfs:/Volumes/"):
+            with open(local_path, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode("utf-8")
+
+            resp = requests.post(
+                f"https://{settings.databricks_host}/api/2.0/dbfs/put",
+                headers={
+                    "Authorization": f"Bearer {settings.databricks_token}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "path": remote_path.replace("dbfs:", ""),
+                    "contents": encoded,
+                    "overwrite": True
+                }
+            )
+            resp.raise_for_status()
+            return
+
+        volume_path = remote_path.replace("dbfs:", "", 1) if remote_path.startswith("dbfs:/Volumes/") else remote_path
+        if volume_path.startswith("/Volumes/"):
+            with open(local_path, "rb") as f:
+                file_bytes = f.read()
+
+            resp = requests.put(
+                f"https://{settings.databricks_host}/api/2.0/fs/files{volume_path}",
+                headers={
+                    "Authorization": f"Bearer {settings.databricks_token}",
+                    "Content-Type": "application/octet-stream"
+                },
+                data=file_bytes,
+                params={"overwrite": "true"}
+            )
+            resp.raise_for_status()
 
     def _submit_and_get_logs(self, payload):
 

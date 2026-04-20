@@ -6,6 +6,7 @@ from llm.llm_query import LLMQuery, invoke_llm
 from prompt.pyspark_code_gen import get_pyspark_prompt
 from prompt.pyspark_correction import get_correction_prompt
 from prompt.relevance_guard import get_relevance_prompt
+from pyspark_utils.code_validator import validate_pyspark_code
 
 logger = get_logger(__name__)
 
@@ -62,6 +63,8 @@ class PySparkCodeGenerator:
 
         columns = ", ".join(c["name"] for c in context["columns"])
         col_count = len(context["columns"])
+        semantic_context = context.get("semantic_context")
+        resolved_terms = context.get("resolved_terms")
 
         # ---- Relevance Guard (Temporarily Disabled) ----
         # if not self._check_relevance(question, columns):
@@ -69,7 +72,7 @@ class PySparkCodeGenerator:
         #         "The question does not relate to the available dataset columns."
         #     )
 
-        prompt = get_pyspark_prompt(columns, question)
+        prompt = get_pyspark_prompt(columns, question, semantic_context, resolved_terms)
         max_tokens = self._get_max_tokens(question, col_count)
 
         logger.info("Sending PySpark generation prompt to LLM (tokens=%d)", max_tokens)
@@ -81,7 +84,7 @@ class PySparkCodeGenerator:
         print("\n=======================================\n")
 
         code = self._sanitize(raw)
-        self._validate(code)
+        self._validate(code, context)
 
         return code
 
@@ -97,12 +100,16 @@ class PySparkCodeGenerator:
         """
         columns = ", ".join(c["name"] for c in context["columns"])
         col_count = len(context["columns"])
+        semantic_context = context.get("semantic_context")
+        resolved_terms = context.get("resolved_terms")
 
         prompt = get_correction_prompt(
             columns=columns,
             question=question,
             failing_code=failing_code,
-            error_message=error_message
+            error_message=error_message,
+            semantic_context=semantic_context,
+            resolved_terms=resolved_terms
         )
 
         max_tokens = self._get_max_tokens(question, col_count)
@@ -116,7 +123,7 @@ class PySparkCodeGenerator:
         print("\n=======================================\n")
 
         code = self._sanitize(raw)
-        self._validate(code)
+        self._validate(code, context)
 
         return code
 
@@ -217,7 +224,7 @@ class PySparkCodeGenerator:
     # --------------------------------------------------
     # PRIVATE: validate generated code
     # --------------------------------------------------
-    def _validate(self, code: str) -> None:
+    def _validate(self, code: str, context: dict) -> None:
         """
         Raise RuntimeError if the code is structurally invalid.
         """
@@ -237,3 +244,8 @@ class PySparkCodeGenerator:
         # Ensure df.count() is not used (should be df.select(F.count("*")))
         if "df.count()" in code:
             raise RuntimeError("Generated PySpark code uses df.count() which is forbidden")
+
+        validate_pyspark_code(
+            code,
+            available_columns=[c["name"] for c in context.get("columns", [])]
+        )

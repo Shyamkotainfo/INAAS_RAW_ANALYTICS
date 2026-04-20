@@ -1,5 +1,9 @@
 # Backend/core/query_orchestrator.py
 
+import json
+import re
+from typing import Any
+
 from logger.logger import get_logger
 from execution.databricks_executor import DatabricksExecutor
 from ingestion.metadata_uploader import MetadataUploader
@@ -24,7 +28,7 @@ class QueryOrchestrator:
     # =====================================================
     # FILE INGESTION
     # =====================================================
-    def attach_file(self, file_id: str, file_path: str, file_format: str):
+    def attach_file(self, file_id: str, file_path: str, file_format: str, context: str = None):
 
         logger.info("Starting ingestion for file: %s", file_path)
 
@@ -42,6 +46,9 @@ class QueryOrchestrator:
 
         schema = ingestion["schema"]
         profiling = ingestion["profiling"]
+
+        if context:
+            schema["semantic_context"] = context
 
         # ----------------------------
         # Upload schema to S3
@@ -72,7 +79,8 @@ class QueryOrchestrator:
             "file_id": file_id,
             "file_path": file_path,
             "format": file_format,
-            "columns": schema["columns"]
+            "columns": schema["columns"],
+            "semantic_context": schema.get("semantic_context")
         }
 
         return profiling
@@ -88,8 +96,24 @@ class QueryOrchestrator:
         context = {
             "file_path": self.active_file["file_path"],
             "format": self.active_file["format"],
-            "columns": self.active_file["columns"]
+            "columns": self.active_file["columns"],
+            "semantic_context": self.active_file.get("semantic_context")
         }
+        context["resolved_terms"] = self._resolve_schema_terms(context)
+        semantic_column_error = self._detect_unavailable_semantic_column(user_input, context)
+        if semantic_column_error:
+            return {
+                "user_input": user_input,
+                "error": semantic_column_error,
+                "query": None,
+                "pyspark": None,
+                "results": None,
+                "insights": None,
+                "text_results": semantic_column_error,
+                "analysis_note": self._build_analysis_note(user_input, context),
+                "attempts": 0,
+            }
+        analysis_note = self._build_analysis_note(user_input, context)
 
         # --------------------------------------------------
         # Step 1 — Relevance guard + initial code generation
@@ -141,6 +165,7 @@ class QueryOrchestrator:
                     "results": result,
                     "insights": summary,
                     "text_results": text_results,
+                    "analysis_note": analysis_note,
                     "attempts": attempt,
                 }
 
@@ -185,5 +210,183 @@ class QueryOrchestrator:
             "results": None,
             "insights": None,
             "text_results": None,
+            "analysis_note": analysis_note,
             "attempts": MAX_RETRIES,
         }
+
+    def _build_analysis_note(self, user_input: str, context: dict) -> str | None:
+        lowered = user_input.lower()
+        mentions_comp = any(term in lowered for term in {"compensation", "pay", "salary"})
+        mentions_band = "band" in lowered
+        has_band_metadata = self._has_explicit_compensation_band_metadata(
+            context.get("semantic_context")
+        )
+
+        if mentions_comp and mentions_band and not has_band_metadata:
+            return (
+                "No explicit compensation band metadata exists in the loaded semantic context. "
+                "This analysis should default to designation-level average compensation. "
+                "Min/max or percentile-style bands would require explicit band metadata or your confirmation."
+            )
+
+        return None
+
+    def _detect_unavailable_semantic_column(self, user_input: str, context: dict) -> str | None:
+        available = {col["name"].lower() for col in context.get("columns", [])}
+        resolved_terms = context.get("resolved_terms", {})
+        lowered = user_input.lower()
+
+        concept_aliases = {
+            "department": {"department", "dept", "dept_name"},
+            "manager": {"manager", "manager_id", "manager_name"},
+            "location": {"location", "city", "region", "office_location"},
+            "business unit": {"business unit", "business_unit", "division"},
+        }
+
+        for concept, aliases in concept_aliases.items():
+            if any(self._contains_term(lowered, alias) for alias in aliases):
+                if concept in resolved_terms:
+                    continue
+                has_column = any(
+                    alias in available
+                    for alias in {item.replace(" ", "_") for item in aliases} | aliases
+                )
+                if not has_column:
+                    return (
+                        f"The loaded dataset does not contain a `{concept}` column, so this question "
+                        f"cannot be answered directly from the uploaded schema. Ask using available columns "
+                        f"such as Designation, Employment_Type, Gender, DOJ, company1/company2/company3, or Pay."
+                    )
+
+        return None
+
+    def _resolve_schema_terms(self, context: dict) -> dict[str, str]:
+        columns = [col["name"] for col in context.get("columns", [])]
+        available = {col.lower(): col for col in columns}
+        resolved: dict[str, str] = {}
+
+        builtin_aliases = {
+            "salary": ["Pay"],
+            "pay": ["Pay"],
+            "compensation": ["Pay"],
+            "ctc": ["Pay"],
+            "lpa": ["Pay"],
+            "joining date": ["DOJ"],
+            "date of joining": ["DOJ"],
+            "joining": ["DOJ"],
+            "hire date": ["DOJ"],
+            "doj": ["DOJ"],
+            "employment type": ["Employment_Type"],
+            "employment": ["Employment_Type"],
+            "employment category": ["Employment_Type"],
+            "job title": ["Designation", "JobTitle1", "JobTitle2", "JobTitle3"],
+            "role": ["Designation", "JobTitle1", "JobTitle2", "JobTitle3"],
+            "job role": ["Designation", "JobTitle1", "JobTitle2", "JobTitle3"],
+            "designation": ["Designation"],
+            "gender": ["Gender"],
+            "qualification": ["Qualification"],
+            "course": ["Course"],
+            "university": ["University"],
+        }
+
+        for concept, candidates in builtin_aliases.items():
+            for candidate in candidates:
+                if candidate.lower() in available:
+                    resolved[concept] = available[candidate.lower()]
+                    break
+
+        semantic_context = context.get("semantic_context")
+        if semantic_context:
+            resolved.update(self._resolve_semantic_aliases(semantic_context, available))
+
+        return resolved
+
+    def _resolve_semantic_aliases(self, semantic_context: str, available: dict[str, str]) -> dict[str, str]:
+        resolved: dict[str, str] = {}
+
+        parsed = self._parse_semantic_context(semantic_context)
+        if not isinstance(parsed, dict):
+            return resolved
+
+        alias_sources = []
+        alias_sources.extend(parsed.get("dimensions", []))
+        alias_sources.extend(parsed.get("measurable_fields", []))
+        domain_summary = parsed.get("business_definitions", {})
+        for items in domain_summary.values():
+            if isinstance(items, list):
+                alias_sources.extend(items)
+
+        for item in alias_sources:
+            if not isinstance(item, dict):
+                continue
+            concept = item.get("dimension") or item.get("field") or item.get("term")
+            names = item.get("typical_column_names", [])
+            if not concept or not isinstance(names, list):
+                continue
+
+            for name in names:
+                normalized = str(name).lower().replace(" ", "_")
+                if normalized in available:
+                    resolved[concept.lower()] = available[normalized]
+                    break
+
+        return resolved
+
+    def _parse_semantic_context(self, semantic_context: str | None) -> dict[str, Any] | None:
+        if not semantic_context:
+            return None
+
+        try:
+            parsed = json.loads(semantic_context)
+        except Exception:
+            return None
+
+        return parsed if isinstance(parsed, dict) else None
+
+    def _has_explicit_compensation_band_metadata(self, semantic_context: str | None) -> bool:
+        parsed = self._parse_semantic_context(semantic_context)
+        if not parsed:
+            return False
+
+        band_keys = {
+            "bands",
+            "band_definitions",
+            "band_metadata",
+            "compensation_bands",
+            "salary_bands",
+            "ranges",
+            "range_definitions",
+            "percentiles",
+            "lower_bound",
+            "upper_bound",
+            "min_pay",
+            "max_pay",
+        }
+        band_terms = {"compensation band", "salary band", "pay band", "band"}
+
+        def walk(value: Any) -> bool:
+            if isinstance(value, dict):
+                lowered_keys = {str(key).lower() for key in value.keys()}
+                if lowered_keys & band_keys:
+                    return True
+
+                descriptor = " ".join(
+                    str(value.get(key, "")).lower()
+                    for key in ("term", "field", "dimension", "name", "title")
+                )
+                if any(term in descriptor for term in band_terms):
+                    if lowered_keys & {"bands", "ranges", "percentiles", "lower_bound", "upper_bound", "min", "max"}:
+                        return True
+
+                return any(walk(item) for item in value.values())
+
+            if isinstance(value, list):
+                return any(walk(item) for item in value)
+
+            return False
+
+        return walk(parsed)
+
+    def _contains_term(self, text: str, term: str) -> bool:
+        escaped = re.escape(term).replace("_", r"[_\s]+").replace(r"\ ", r"\s+")
+        return bool(re.search(rf"(?<!\w){escaped}(?!\w)", text))
