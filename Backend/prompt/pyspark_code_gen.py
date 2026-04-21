@@ -66,6 +66,18 @@ RESOLUTION RULES:
 - If the user uses a business term that appears in RESOLVED TERM MAPPINGS, use the mapped real column from AVAILABLE COLUMNS.
 - Prefer resolved mappings over guessing.
 - Only fail a concept when no safe mapping exists and no matching base column exists.
+BUSINESS CONTEXT
+=====================================================
+
+{semantic_context or "No additional business context provided."}
+
+BUSINESS CONTEXT RULES:
+- Treat BUSINESS CONTEXT as business guidance only, not as physical schema.
+- Use BUSINESS CONTEXT to improve business reasoning, KPI interpretation, and guardrail awareness.
+- NEVER invent columns from BUSINESS CONTEXT alone.
+- ALWAYS prioritize the real dataset columns listed in AVAILABLE COLUMNS.
+- If BUSINESS CONTEXT mentions a concept but no matching column exists in AVAILABLE COLUMNS, do not generate PySpark that references a made-up field.
+- Use BUSINESS CONTEXT to improve reasoning, not to extend the schema.
 
 =====================================================
 MODE A — META / STRUCTURAL INTELLIGENCE
@@ -315,6 +327,7 @@ COMPENSATION ANALYSIS RULES
   default to comparing against designation-level average compensation and make that fallback explicit.
 - Do NOT invent salary bands, buckets, min/max thresholds, or percentile cutoffs unless they are explicitly defined in SEMANTIC CONTEXT or explicitly requested by the user.
 - If the user asks for percentile-style or min/max banding and SEMANTIC CONTEXT does not define bands, compute those only when the user explicitly asks for that comparison.
+- If BUSINESS CONTEXT suggests a business concept but the actual column does not exist, fall back only to the closest real column when that mapping is obvious from AVAILABLE COLUMNS.
 
 =====================================================
 ABSOLUTE RULES (NO EXCEPTIONS)
@@ -322,6 +335,7 @@ ABSOLUTE RULES (NO EXCEPTIONS)
 
 - NEVER INVENT COLUMN NAMES. ONLY use exact column names from AVAILABLE COLUMNS above.
 - NEVER convert semantic-layer concepts into DataFrame columns unless the exact column exists in AVAILABLE COLUMNS.
+- NEVER convert a business concept from BUSINESS CONTEXT into a DataFrame column unless that exact column exists in AVAILABLE COLUMNS.
 - NEVER use SQL queries. NEVER spark.sql(). Only DataFrame APIs.
 - NEVER use python loops (for, while), list comprehensions, or pandas logic.
 - ALWAYS use F. prefix for all functions (e.g. F.col(), F.sum(), F.count()).

@@ -49,6 +49,12 @@ class QueryOrchestrator:
 
         if context:
             schema["semantic_context"] = context
+        semantic_context = None
+        if context:
+            logger.info("Loading semantic context from Databricks Volume: %s", context)
+            semantic_context = self.executor.read_volume_text(context)
+            schema["semantic_context_path"] = context
+            schema["semantic_context"] = semantic_context
 
         # ----------------------------
         # Upload schema to S3
@@ -81,6 +87,8 @@ class QueryOrchestrator:
             "format": file_format,
             "columns": schema["columns"],
             "semantic_context": schema.get("semantic_context")
+            "semantic_context": semantic_context,
+            "semantic_context_path": context
         }
 
         return profiling

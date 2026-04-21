@@ -47,6 +47,28 @@ class DatabricksExecutor:
             "profiling": profiling
         }
 
+    def read_volume_text(self, volume_path: str) -> str:
+        normalized_path = volume_path.strip()
+        if normalized_path.startswith("dbfs:/Volumes/"):
+            normalized_path = normalized_path.replace("dbfs:", "", 1)
+
+        if not normalized_path.startswith("/Volumes/"):
+            raise RuntimeError(
+                f"Semantic context must be a Databricks Volume path. Received: {volume_path}"
+            )
+
+        resp = requests.get(
+            f"https://{settings.databricks_host}/api/2.0/fs/files{normalized_path}",
+            headers={"Authorization": f"Bearer {settings.databricks_token}"}
+        )
+        resp.raise_for_status()
+
+        text = resp.text
+        if not text.strip():
+            raise RuntimeError(f"Semantic context file is empty: {normalized_path}")
+
+        return text
+
     # =====================================================
     # UPLOAD TO DATABRICKS
     # =====================================================

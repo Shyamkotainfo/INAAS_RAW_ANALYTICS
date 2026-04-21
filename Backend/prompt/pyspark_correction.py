@@ -8,6 +8,7 @@ def get_correction_prompt(
     error_message: str,
     semantic_context: str | None = None,
     resolved_terms: dict[str, str] | None = None
+   #  semantic_context: str | None = None
 ) -> str:
     return f"""
 You are an **Elite PySpark Debugging Agent**.
@@ -53,6 +54,16 @@ RESOLVED TERM MAPPINGS
 RESOLUTION RULES:
 - If the user used a business term that appears in RESOLVED TERM MAPPINGS, rewrite the code to use the mapped real column.
 - Prefer resolved mappings over guessing new column names.
+BUSINESS CONTEXT
+=====================================================
+
+{semantic_context or "No additional business context provided."}
+
+BUSINESS CONTEXT RULES:
+- Treat BUSINESS CONTEXT as business guidance only, not as additional schema.
+- NEVER keep or introduce a column reference just because the business context mentions that concept.
+- If failing code used a business term as if it were a real column, replace it with a real dataset column only when the mapping is clearly supported by AVAILABLE COLUMNS.
+- ALWAYS prioritize executable correctness against AVAILABLE COLUMNS.
 
 =====================================================
 USER QUESTION

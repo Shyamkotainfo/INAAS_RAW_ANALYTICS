@@ -133,6 +133,24 @@ def main():
 
                     print(f"Uploaded to: {volume_path}")
 
+                    print("\nSelect Business Context:")
+                    print("1. HR")
+                    print("2. None")
+
+                    choice = input("Enter choice: ").strip()
+                    domain_map = {
+                        "1": "hr",
+                        "2": None
+                    }
+                    selected_domain = domain_map.get(choice)
+
+                    if choice not in domain_map:
+                        print("Invalid choice. Defaulting to no business context.")
+
+                    semantic_context = None
+                    if selected_domain:
+                        semantic_context = settings.DOMAIN_CONTEXT_PATHS.get(selected_domain)
+
                 # ------------------------------------------
                 # Volume path
                 # ------------------------------------------
@@ -140,6 +158,7 @@ def main():
 
                     volume_path = path
                     file_format = detect_format(volume_path)
+                    semantic_context = None
 
                 # ------------------------------------------
                 # Run profiling
@@ -149,6 +168,7 @@ def main():
                     file_path=volume_path,
                     file_format=file_format,
                     context=context_str if mode == "local" else None
+                    context=semantic_context
                 )
 
                 # ------------------------------------------
