@@ -1,6 +1,4 @@
 # Backend/prompt/pyspark_correction.py
-
-
 def get_correction_prompt(
     columns: str,
     question: str,
