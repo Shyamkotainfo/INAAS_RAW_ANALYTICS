@@ -16,7 +16,7 @@ from pydantic import Field, validator
 
 class Settings(BaseSettings):
     DOMAIN_CONTEXT_PATHS: ClassVar[dict[str, str]] = {
-        "hr": "/Volumes/inaas_dev/raw_analytics/hr_context_doc/hr_context_doc.md"
+        "hr": "/Volumes/inaas_dev/raw_analytics/hr_context_doc/hr_semantic_layer.md"
     }
 
     # =========================
