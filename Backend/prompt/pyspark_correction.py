@@ -1,7 +1,13 @@
 # Backend/prompt/pyspark_correction.py
 
 
-def get_correction_prompt(columns: str, question: str, failing_code: str, error_message: str) -> str:
+def get_correction_prompt(
+    columns: str,
+    question: str,
+    failing_code: str,
+    error_message: str,
+    semantic_context: str | None = None
+) -> str:
     return f"""
 You are an **Elite PySpark Debugging Agent**.
 
@@ -25,6 +31,18 @@ AVAILABLE COLUMNS (exact names, use ONLY these)
 =====================================================
 
 {columns}
+
+=====================================================
+BUSINESS CONTEXT
+=====================================================
+
+{semantic_context or "No additional business context provided."}
+
+BUSINESS CONTEXT RULES:
+- Treat BUSINESS CONTEXT as business guidance only, not as additional schema.
+- NEVER keep or introduce a column reference just because the business context mentions that concept.
+- If failing code used a business term as if it were a real column, replace it with a real dataset column only when the mapping is clearly supported by AVAILABLE COLUMNS.
+- ALWAYS prioritize executable correctness against AVAILABLE COLUMNS.
 
 =====================================================
 USER QUESTION

@@ -62,6 +62,7 @@ class PySparkCodeGenerator:
 
         columns = ", ".join(c["name"] for c in context["columns"])
         col_count = len(context["columns"])
+        semantic_context = context.get("semantic_context")
 
         # ---- Relevance Guard (Temporarily Disabled) ----
         # if not self._check_relevance(question, columns):
@@ -69,7 +70,7 @@ class PySparkCodeGenerator:
         #         "The question does not relate to the available dataset columns."
         #     )
 
-        prompt = get_pyspark_prompt(columns, question)
+        prompt = get_pyspark_prompt(columns, question, semantic_context)
         max_tokens = self._get_max_tokens(question, col_count)
 
         logger.info("Sending PySpark generation prompt to LLM (tokens=%d)", max_tokens)
@@ -97,12 +98,14 @@ class PySparkCodeGenerator:
         """
         columns = ", ".join(c["name"] for c in context["columns"])
         col_count = len(context["columns"])
+        semantic_context = context.get("semantic_context")
 
         prompt = get_correction_prompt(
             columns=columns,
             question=question,
             failing_code=failing_code,
-            error_message=error_message
+            error_message=error_message,
+            semantic_context=semantic_context
         )
 
         max_tokens = self._get_max_tokens(question, col_count)

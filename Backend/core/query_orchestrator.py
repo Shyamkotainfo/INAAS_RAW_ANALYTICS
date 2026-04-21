@@ -24,7 +24,7 @@ class QueryOrchestrator:
     # =====================================================
     # FILE INGESTION
     # =====================================================
-    def attach_file(self, file_id: str, file_path: str, file_format: str):
+    def attach_file(self, file_id: str, file_path: str, file_format: str, context: str = None):
 
         logger.info("Starting ingestion for file: %s", file_path)
 
@@ -42,6 +42,13 @@ class QueryOrchestrator:
 
         schema = ingestion["schema"]
         profiling = ingestion["profiling"]
+
+        semantic_context = None
+        if context:
+            logger.info("Loading semantic context from Databricks Volume: %s", context)
+            semantic_context = self.executor.read_volume_text(context)
+            schema["semantic_context_path"] = context
+            schema["semantic_context"] = semantic_context
 
         # ----------------------------
         # Upload schema to S3
@@ -72,7 +79,9 @@ class QueryOrchestrator:
             "file_id": file_id,
             "file_path": file_path,
             "format": file_format,
-            "columns": schema["columns"]
+            "columns": schema["columns"],
+            "semantic_context": semantic_context,
+            "semantic_context_path": context
         }
 
         return profiling
@@ -88,7 +97,8 @@ class QueryOrchestrator:
         context = {
             "file_path": self.active_file["file_path"],
             "format": self.active_file["format"],
-            "columns": self.active_file["columns"]
+            "columns": self.active_file["columns"],
+            "semantic_context": self.active_file.get("semantic_context")
         }
 
         # --------------------------------------------------
