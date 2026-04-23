@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, File, X, Link } from "lucide-react";
+import { Progress } from "../ui/progress";
 
 interface CreateExplorationTaskDialogProps {
   open: boolean;
@@ -21,14 +22,43 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
   const [fileUrl, setFileUrl] = useState("");
   const [sourceTab, setSourceTab] = useState("upload");
   const [selectedFile, setSelectedFile] = useState<File | undefined>(undefined);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const uploadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (uploadIntervalRef.current) clearInterval(uploadIntervalRef.current);
+    };
+  }, []);
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
+  const simulateUpload = (f: File) => {
+    setIsUploading(true);
+    setUploadProgress(0);
+    // Simulate progress based on file size (larger = slower)
+    const duration = Math.min(Math.max(f.size / 50000, 1000), 15000);
+    const steps = 50;
+    const increment = 100 / steps;
+    const interval = duration / steps;
+    let current = 0;
+    uploadIntervalRef.current = setInterval(() => {
+      current += increment;
+      if (current >= 100) {
+        setUploadProgress(100);
+        setIsUploading(false);
+        setFile({ name: f.name, size: f.size });
+        if (uploadIntervalRef.current) clearInterval(uploadIntervalRef.current);
+      } else {
+        setUploadProgress(Math.round(current));
+      }
+    }, interval);
+  };
 
   const handleFile = (f: File) => {
-    setFile({ name: f.name, size: f.size });
+    simulateUpload(f);
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -109,7 +139,8 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
 
           <div className="space-y-2">
             <Label>Data Source</Label>
-            <Tabs value={sourceTab} onValueChange={(val)=>{setSourceTab(val);
+            <Tabs value={sourceTab} onValueChange={(val) => {
+              setSourceTab(val);
               setFile(null);
               setFileUrl("");
               // setSelectedFile()
@@ -136,8 +167,19 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
                   <p className="text-xs text-muted-foreground">CSV, JSON, Parquet, Excel up to 50MB</p>
                   <input id="file-upload" type="file" className="hidden" accept=".csv,.json,.parquet,.xlsx,.xls" onChange={handleFileInput} />
                 </div>
+                {isUploading && (
+                  <div className="mt-3 space-y-2 p-3 rounded-lg border border-border bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                      <p className="text-sm font-medium text-foreground">Uploading file…</p>
+                      <span className="ml-auto text-xs text-muted-foreground">{uploadProgress}%</span>
+                    </div>
+                    <Progress value={uploadProgress} className="h-2" />
+                    <p className="text-xs text-muted-foreground animate-pulse">Please wait, large files may take a few minutes</p>
+                  </div>
+                )}
 
-                {file && (
+                { file && (
                   <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30 mt-3">
                     <File className="w-4 h-4 text-primary flex-shrink-0" />
                     <div className="flex-1 min-w-0">
