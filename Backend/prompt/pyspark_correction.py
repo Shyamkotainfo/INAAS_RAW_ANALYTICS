@@ -128,6 +128,11 @@ CORRECTION RULES
    - Exclude null or unparseable normalized pay values from compensation math.
    - Do NOT treat "compensation band" as average compensation unless SEMANTIC CONTEXT explicitly defines a band model.
    - If SEMANTIC CONTEXT does not define compensation bands, prefer designation-level average compensation as the fallback comparison.
+6. When correcting failed code:
+   - Do not only fix missing columns.
+   - Re-evaluate whether the business metric logic itself is correct.
+   - Especially for attrition, compensation, promotion, and retention analysis.
+   - If the first attempt used an invalid business assumption, rewrite the logic instead of only replacing column names.
 
 =====================================================
 CHAIN OF THOUGHT (MANDATORY - use # comments)

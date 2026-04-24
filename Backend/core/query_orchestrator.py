@@ -1,14 +1,19 @@
 # Backend/core/query_orchestrator.py
 
+<<<<<<< HEAD
 import json
 import re
 from typing import Any
+=======
+import hashlib
+>>>>>>> f3d12b2 (context doc update)
 
 from logger.logger import get_logger
 from execution.databricks_executor import DatabricksExecutor
 from ingestion.metadata_uploader import MetadataUploader
 from rag.bedrock_ingestor import trigger_bedrock_ingestion
 from config.settings import settings
+from prompt.pyspark_code_gen import build_semantic_context
 from query_generation.pyspark_generator import PySparkCodeGenerator, IrrelevantQueryError
 from summarization.result_summarizer import ResultSummarizer
 
@@ -50,11 +55,10 @@ class QueryOrchestrator:
         if context:
             schema["semantic_context"] = context
         semantic_context = None
+        semantic_context_hash = None
         if context:
-            logger.info("Loading semantic context from Databricks Volume: %s", context)
-            semantic_context = self.executor.read_volume_text(context)
+            logger.info("Wiki root configured for targeted retrieval: %s", context)
             schema["semantic_context_path"] = context
-            schema["semantic_context"] = semantic_context
 
         # ----------------------------
         # Upload schema to S3
@@ -88,7 +92,8 @@ class QueryOrchestrator:
             "columns": schema["columns"],
             "semantic_context": schema.get("semantic_context")
             "semantic_context": semantic_context,
-            "semantic_context_path": context
+            "semantic_context_path": context,
+            "semantic_context_hash": semantic_context_hash
         }
 
         return profiling
@@ -105,7 +110,8 @@ class QueryOrchestrator:
             "file_path": self.active_file["file_path"],
             "format": self.active_file["format"],
             "columns": self.active_file["columns"],
-            "semantic_context": self.active_file.get("semantic_context")
+            "semantic_context": self.active_file.get("semantic_context"),
+            "semantic_context_path": self.active_file.get("semantic_context_path"),
         }
         context["resolved_terms"] = self._resolve_schema_terms(context)
         semantic_column_error = self._detect_unavailable_semantic_column(user_input, context)
@@ -122,6 +128,25 @@ class QueryOrchestrator:
                 "attempts": 0,
             }
         analysis_note = self._build_analysis_note(user_input, context)
+
+        if context.get("semantic_context_path"):
+            columns = ", ".join(c["name"] for c in context["columns"])
+            context["semantic_context"] = build_semantic_context(
+                question=user_input,
+                columns=columns,
+                top_k=3
+            )
+            self.active_file["semantic_context"] = context["semantic_context"]
+            self.active_file["semantic_context_hash"] = self._hash_text(context["semantic_context"])
+
+        context_debug = self._build_context_debug(context)
+        logger.info(
+            "Passing semantic context to LLM | used=%s | path=%s | chars=%d | hash=%s",
+            context_debug["context_used"],
+            context_debug["context_path"],
+            context_debug["context_chars"],
+            context_debug["context_hash"]
+        )
 
         # --------------------------------------------------
         # Step 1 — Relevance guard + initial code generation
@@ -142,6 +167,7 @@ class QueryOrchestrator:
                 "results": None,
                 "insights": None,
                 "text_results": None,
+                "context_debug": context_debug,
             }
 
         # --------------------------------------------------
@@ -175,6 +201,7 @@ class QueryOrchestrator:
                     "text_results": text_results,
                     "analysis_note": analysis_note,
                     "attempts": attempt,
+                    "context_debug": context_debug,
                 }
 
             # FAILED — capture error and try to correct
@@ -220,6 +247,7 @@ class QueryOrchestrator:
             "text_results": None,
             "analysis_note": analysis_note,
             "attempts": MAX_RETRIES,
+            "context_debug": context_debug,
         }
 
     def _build_analysis_note(self, user_input: str, context: dict) -> str | None:
@@ -398,3 +426,15 @@ class QueryOrchestrator:
     def _contains_term(self, text: str, term: str) -> bool:
         escaped = re.escape(term).replace("_", r"[_\s]+").replace(r"\ ", r"\s+")
         return bool(re.search(rf"(?<!\w){escaped}(?!\w)", text))
+    def _build_context_debug(self, context: dict) -> dict:
+        semantic_context = context.get("semantic_context") or ""
+        return {
+            "context_used": bool(semantic_context),
+            "context_path": self.active_file.get("semantic_context_path") if self.active_file else None,
+            "context_chars": len(semantic_context),
+            "context_hash": self.active_file.get("semantic_context_hash") if self.active_file else None,
+            "context_marker_present": "CONTEXT_MARKER" in semantic_context,
+        }
+
+    def _hash_text(self, text: str) -> str:
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]

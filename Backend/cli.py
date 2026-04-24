@@ -149,7 +149,7 @@ def main():
 
                     semantic_context = None
                     if selected_domain:
-                        semantic_context = settings.DOMAIN_CONTEXT_PATHS.get(selected_domain)
+                        semantic_context = settings.DOMAIN_WIKI_ROOTS.get(selected_domain)
 
                 # ------------------------------------------
                 # Volume path
