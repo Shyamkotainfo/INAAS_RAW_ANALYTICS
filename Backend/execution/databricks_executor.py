@@ -2,6 +2,9 @@ import requests
 import time
 import json
 from config.settings import settings
+from logger.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class DatabricksExecutor:
@@ -56,6 +59,12 @@ class DatabricksExecutor:
         text = resp.text
         if not text.strip():
             raise RuntimeError(f"Semantic context file is empty: {normalized_path}")
+
+        logger.info(
+            "Read semantic context from Databricks Volume | path=%s | chars=%d",
+            normalized_path,
+            len(text)
+        )
 
         return text
 

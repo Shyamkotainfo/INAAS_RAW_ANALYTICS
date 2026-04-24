@@ -93,6 +93,12 @@ CORRECTION RULES
 5. If the error is an AnalysisException about schema mismatch before unionByName:
    - Align ALL intermediate DataFrames to have exactly the same column names and types.
 
+6. When correcting failed code:
+   - Do not only fix missing columns.
+   - Re-evaluate whether the business metric logic itself is correct.
+   - Especially for attrition, compensation, promotion, and retention analysis.
+   - If the first attempt used an invalid business assumption, rewrite the logic instead of only replacing column names.
+
 =====================================================
 CHAIN OF THOUGHT (MANDATORY — use # comments)
 =====================================================

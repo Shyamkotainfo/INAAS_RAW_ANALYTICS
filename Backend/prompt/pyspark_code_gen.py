@@ -1,3 +1,19 @@
+from prompt.wiki_retriever import retrieve_relevant_chunks
+
+
+def build_semantic_context(question: str, columns: str, top_k: int = 3) -> str:
+    """
+    Replaces full HR markdown injection with targeted wiki retrieval.
+    Call this instead of loading the full semantic layer document.
+    Returns a focused semantic context string ready to pass into get_pyspark_prompt.
+    """
+    return retrieve_relevant_chunks(
+        question=question,
+        schema_columns=columns,
+        top_k=top_k
+    )
+
+
 def get_pyspark_prompt(columns: str, question: str, semantic_context: str | None = None) -> str:
     return f"""
 You are an **Elite Data Science and Analytics Agent** specializing in Raw Data Exploration using PySpark.

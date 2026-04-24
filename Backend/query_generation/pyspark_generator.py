@@ -73,6 +73,14 @@ class PySparkCodeGenerator:
         prompt = get_pyspark_prompt(columns, question, semantic_context)
         max_tokens = self._get_max_tokens(question, col_count)
 
+        logger.info(
+            "LLM generation prompt built | semantic_context_present=%s | context_chars=%d | marker_in_prompt=%s | prompt_chars=%d",
+            bool(semantic_context),
+            len(semantic_context or ""),
+            "CONTEXT_MARKER" in prompt,
+            len(prompt)
+        )
+
         logger.info("Sending PySpark generation prompt to LLM (tokens=%d)", max_tokens)
         raw = self.llm.generate(prompt, max_tokens=max_tokens).strip()
         logger.info("Received PySpark code from LLM")
@@ -82,7 +90,18 @@ class PySparkCodeGenerator:
         print("\n=======================================\n")
 
         code = self._sanitize(raw)
-        self._validate(code)
+        try:
+            self._validate(code)
+        except RuntimeError as e:
+            logger.warning("Initial PySpark generation failed validation: %s", str(e))
+            code = self._repair_initial_generation(
+                question=question,
+                columns=columns,
+                failing_code=code or raw,
+                error_message=str(e),
+                semantic_context=semantic_context,
+                max_tokens=max_tokens
+            )
 
         return code
 
@@ -109,6 +128,14 @@ class PySparkCodeGenerator:
         )
 
         max_tokens = self._get_max_tokens(question, col_count)
+
+        logger.info(
+            "LLM correction prompt built | semantic_context_present=%s | context_chars=%d | marker_in_prompt=%s | prompt_chars=%d",
+            bool(semantic_context),
+            len(semantic_context or ""),
+            "CONTEXT_MARKER" in prompt,
+            len(prompt)
+        )
 
         logger.info("Sending PySpark correction prompt to LLM (attempt)")
         raw = self.llm.generate(prompt, max_tokens=max_tokens).strip()
@@ -169,6 +196,34 @@ class PySparkCodeGenerator:
             # Fail open — if we can't parse the guard response, allow generation
             logger.warning("Relevance guard failed to parse response, failing open: %s", str(e))
             return True
+
+    def _repair_initial_generation(
+        self,
+        question: str,
+        columns: str,
+        failing_code: str,
+        error_message: str,
+        semantic_context: str | None,
+        max_tokens: int,
+    ) -> str:
+        prompt = get_correction_prompt(
+            columns=columns,
+            question=question,
+            failing_code=failing_code,
+            error_message=error_message,
+            semantic_context=semantic_context
+        )
+
+        logger.info("Repairing initial PySpark generation after validation failure")
+        raw = self.llm.generate(prompt, max_tokens=max_tokens).strip()
+
+        print("\n========== REPAIRED INITIAL PYSPARK ==========\n")
+        print(raw)
+        print("\n==============================================\n")
+
+        repaired_code = self._sanitize(raw)
+        self._validate(repaired_code)
+        return repaired_code
 
     # --------------------------------------------------
     # PRIVATE: dynamic token budget
