@@ -10,11 +10,12 @@ def get_pyspark_prompt(
     pass
 
 
-def build_semantic_context(question: str, columns: str, top_k: int = 3) -> str:
+# def build_semantic_context(question: str, columns: str, top_k: int = 3) -> str:
+def build_semantic_context(question: str, columns: str, top_k: int = 1) -> str:
     """
-    Replaces full HR markdown injection with targeted wiki retrieval.
-    Call this instead of loading the full semantic layer document.
-    Returns a focused semantic context string ready to pass into get_pyspark_prompt.
+    Optional supporting context only.
+    This is allowed to provide glossary and narrative support, but it is not the
+    primary semantic source for business-rule enforcement.
     """
     return retrieve_relevant_chunks(
         question=question,
@@ -23,37 +24,109 @@ def build_semantic_context(question: str, columns: str, top_k: int = 3) -> str:
     )
 
 
-def get_pyspark_prompt(columns: str, question: str, semantic_context: str | None = None) -> str:
+def _format_columns(columns: str) -> str:
+    column_names = [column.strip() for column in columns.split(",") if column.strip()]
+    return "\n".join(f"- {column}" for column in column_names) or "- None"
+
+
+def _format_mappings(resolved_mappings: dict[str, str]) -> str:
+    if not resolved_mappings:
+        return "- None"
+
+    lines = []
+    for logical_name, physical_name in resolved_mappings.items():
+        lines.append(f"- {logical_name} -> {physical_name}")
+    return "\n".join(lines)
+
+
+def _format_rule(business_rule: dict | None) -> str:
+    if not business_rule:
+        return "No exact business rule matched the question."
+
+    lines = []
+    rule_name = business_rule.get("name", "unknown_rule")
+    lines.append(f"Rule name: {rule_name}")
+    lines.append(f"Definition: {business_rule.get('definition', 'N/A')}")
+
+    required_fields = business_rule.get("required_fields", [])
+    if required_fields:
+        lines.append("Required logical fields:")
+        lines.extend(f"- {field}" for field in required_fields)
+
+    required_any_of = business_rule.get("required_any_of", [])
+    if required_any_of:
+        lines.append("Require at least one of:")
+        lines.extend(f"- {field}" for field in required_any_of)
+
+    rule_steps = business_rule.get("rule", [])
+    if rule_steps:
+        lines.append("Rule steps:")
+        lines.extend(f"- {step}" for step in rule_steps)
+
+    voluntary_examples = business_rule.get("voluntary_examples", [])
+    if voluntary_examples:
+        lines.append("Voluntary examples:")
+        lines.extend(f"- {value}" for value in voluntary_examples)
+
+    involuntary_examples = business_rule.get("involuntary_examples", [])
+    if involuntary_examples:
+        lines.append("Involuntary examples:")
+        lines.extend(f"- {value}" for value in involuntary_examples)
+
+    fallback = business_rule.get("fallback")
+    if fallback:
+        lines.append(f"Fallback: {fallback}")
+
+    missing_fields = business_rule.get("missing_required_fields", [])
+    if missing_fields:
+        lines.append("Missing required logical fields:")
+        lines.extend(f"- {field}" for field in missing_fields)
+
+    return "\n".join(lines)
+
+
+def _format_supporting_context(semantic_context: str | None) -> str:
+    if semantic_context and semantic_context.strip():
+        return semantic_context.strip()
+    return "None"
+
+
+def get_pyspark_prompt(
+    columns: str,
+    question: str,
+    resolved_mappings: dict[str, str] | None = None,
+    business_rule: dict | None = None,
+    guardrails: str | None = None,
+    semantic_context: str | None = None,
+) -> str:
     return f"""
-You are an **Elite Data Science and Analytics Agent** specializing in Raw Data Exploration using PySpark.
+You are generating executable PySpark code.
 
-Your goal is to act as an autonomous analyst operating in TWO modes:
-- MODE A: META / STRUCTURAL questions → Understand WHAT the data IS before any analysis.
-- MODE B: ANALYTICAL questions → Answer business questions using the data.
+AVAILABLE COLUMNS:
+{_format_columns(columns)}
 
-A raw DataFrame named `df` already exists. The environment provides:
-`from pyspark.sql import functions as F`
-`from pyspark.sql import Window`
+RESOLVED COLUMN MAPPINGS (MANDATORY):
+{_format_mappings(resolved_mappings or {})}
 
-You MUST NOT import anything. The above imports are ALREADY done for you.
+BUSINESS RULE (MANDATORY):
+{_format_rule(business_rule)}
 
-=====================================================
-MODE DETECTION (READ FIRST — ALWAYS)
-=====================================================
+HARD GUARDRAILS:
+{(guardrails or "None").strip()}
 
-Before doing anything else, classify the user's question into MODE A or MODE B.
+OPTIONAL SUPPORTING CONTEXT:
+{_format_supporting_context(semantic_context)}
 
-MODE A — META / STRUCTURAL (triggered by phrases like):
-  "what are the dimensions", "what are the measures", "what does one row represent",
-  "what is the grain", "what columns do I have", "profile this dataset", "give me an overview",
-  "what kind of dataset is this", "what are the date columns", "time range", "data quality",
-  "are there nulls", "duplicates", "what can I join", "foreign keys", "summarize the schema",
-  "what is in this dataset", "what can I slice by", "what can I aggregate",
-  "what hierarchies exist", "country state city", "parent child", "is there a hierarchy", "drill down",
-  "is this raw", "level of aggregation", "granularity", "is this summarized", "rolled up",
-  "gaps in time", "missing days", "missing weeks", "are there gaps", "time coverage", "continuity",
-  "what kpis", "what metrics can i derive", "business metrics", "primary business outcome",
-  "what can i measure", "which column is the key metric", "what can I build a dashboard from"
+HARD RULES:
+- NEVER invent column names.
+- ONLY use exact columns from AVAILABLE COLUMNS.
+- NEVER convert business concepts into fake columns.
+- RESOLVED COLUMN MAPPINGS are mandatory and override your guesses.
+- BUSINESS RULE is mandatory and must be applied exactly when present.
+- If required fields are missing, return a one-row DataFrame with status = "CANNOT_COMPUTE" and a reason column.
+- NEVER use SQL.
+- ONLY use DataFrame API.
+- ALWAYS assign the final result to final_df.
 
 MODE B — ANALYTICAL (everything else):
   Aggregations, trends, filters, top-N, distributions, comparisons, cohorts, anomalies.
@@ -491,6 +564,13 @@ final_df = df.groupBy(F.to_date(F.col("Sale_Date"), "yyyy-MM-dd").alias("sale_da
 =====================================================
 USER QUESTION
 =====================================================
+Before code, write only short # comments:
+# 1. columns used
+# 2. cleaning needed
+# 3. transformation strategy
 
+Return ONLY executable PySpark code.
+
+USER QUESTION:
 {question}
 """

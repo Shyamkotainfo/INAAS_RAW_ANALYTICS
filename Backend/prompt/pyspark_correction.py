@@ -1,30 +1,85 @@
-# Backend/prompt/pyspark_correction.py
+def _format_columns(columns: str) -> str:
+    column_names = [column.strip() for column in columns.split(",") if column.strip()]
+    return "\n".join(f"- {column}" for column in column_names) or "- None"
+
+
+def _format_mappings(resolved_mappings: dict[str, str]) -> str:
+    if not resolved_mappings:
+        return "- None"
+    return "\n".join(f"- {key} -> {value}" for key, value in resolved_mappings.items())
+
+
+def _format_rule(business_rule: dict | None) -> str:
+    if not business_rule:
+        return "No exact business rule matched the question."
+
+    lines = [
+        f"Rule name: {business_rule.get('name', 'unknown_rule')}",
+        f"Definition: {business_rule.get('definition', 'N/A')}",
+    ]
+
+    required_fields = business_rule.get("required_fields", [])
+    if required_fields:
+        lines.append("Required logical fields:")
+        lines.extend(f"- {field}" for field in required_fields)
+
+    required_any_of = business_rule.get("required_any_of", [])
+    if required_any_of:
+        lines.append("Require at least one of:")
+        lines.extend(f"- {field}" for field in required_any_of)
+
+    rule_steps = business_rule.get("rule", [])
+    if rule_steps:
+        lines.append("Rule steps:")
+        lines.extend(f"- {step}" for step in rule_steps)
+
+    voluntary_examples = business_rule.get("voluntary_examples", [])
+    if voluntary_examples:
+        lines.append("Voluntary examples:")
+        lines.extend(f"- {value}" for value in voluntary_examples)
+
+    involuntary_examples = business_rule.get("involuntary_examples", [])
+    if involuntary_examples:
+        lines.append("Involuntary examples:")
+        lines.extend(f"- {value}" for value in involuntary_examples)
+
+    fallback = business_rule.get("fallback")
+    if fallback:
+        lines.append(f"Fallback: {fallback}")
+
+    missing_fields = business_rule.get("missing_required_fields", [])
+    if missing_fields:
+        lines.append("Missing required logical fields:")
+        lines.extend(f"- {field}" for field in missing_fields)
+
+    return "\n".join(lines)
+
+
 def get_correction_prompt(
     columns: str,
     question: str,
     failing_code: str,
     error_message: str,
     semantic_context: str | None = None,
-    resolved_terms: dict[str, str] | None = None
-   #  semantic_context: str | None = None
+    resolved_terms: dict[str, str] | None = None,
+    resolved_mappings: dict[str, str] | None = None,
+    business_rule: dict | None = None,
+    guardrails: str | None = None
 ) -> str:
     return f"""
-You are an **Elite PySpark Debugging Agent**.
+You are fixing executable PySpark code.
 
-A PySpark query was generated to answer a user's question about raw data, but it FAILED when executed
-on Databricks. Your task is to analyse the error and return a corrected, fully executable version.
+AVAILABLE COLUMNS:
+{_format_columns(columns)}
 
-=====================================================
-ENVIRONMENT
-=====================================================
+RESOLVED COLUMN MAPPINGS (MANDATORY):
+{_format_mappings(resolved_mappings or {})}
 
-A raw DataFrame named `df` already exists.
-The environment provides ONLY:
-  from pyspark.sql import functions as F
-  from pyspark.sql import Window
+BUSINESS RULE (MANDATORY):
+{_format_rule(business_rule)}
 
-You MUST NOT import anything else. These are ALREADY imported for you.
-FINAL result MUST be assigned to exactly one variable named: final_df
+HARD GUARDRAILS:
+{(guardrails or "None").strip()}
 
 =====================================================
 AVAILABLE COLUMNS (exact names, base dataset only)
@@ -72,18 +127,25 @@ USER QUESTION
 =====================================================
 FAILING CODE
 =====================================================
+OPTIONAL SUPPORTING CONTEXT:
+{(semantic_context or "None").strip()}
 
+FAILING CODE:
 {failing_code}
 
-=====================================================
-EXECUTION ERROR
-=====================================================
-
+EXECUTION ERROR:
 {error_message}
 
-=====================================================
-CORRECTION RULES
-=====================================================
+HARD RULES:
+- NEVER invent column names.
+- ONLY use exact columns from AVAILABLE COLUMNS.
+- NEVER convert business concepts into fake columns.
+- RESOLVED COLUMN MAPPINGS are mandatory and override your guesses.
+- BUSINESS RULE is mandatory and must be preserved.
+- If required fields are missing, return a one-row DataFrame with status = "CANNOT_COMPUTE" and a reason column.
+- NEVER use SQL.
+- ONLY use DataFrame API.
+- ALWAYS assign the final result to final_df.
 
 1. Read the error message carefully. Identify the ROOT CAUSE:
    - AnalysisException -> wrong column name, incompatible schema, wrong join key, bad cast
@@ -98,8 +160,12 @@ CORRECTION RULES
    - ParseException            → syntax error in string expressions
    - IllegalArgumentException → bad function arguments (e.g. wrong format string)
    - TypeError                → Python-level type mismatch
+Before code, write only short # comments:
+# 1. root cause
+# 2. columns used
+# 3. fix strategy
 
-2. Fix ONLY the lines causing the error. Do NOT rewrite the entire logic unnecessarily.
+Return ONLY executable PySpark code.
 
 3. ABSOLUTE RULES:
    - NEVER invent base dataset column names. Use ONLY the exact names in AVAILABLE COLUMNS for the raw input schema.
@@ -153,4 +219,6 @@ Start with your # comments.
 Then write the corrected PySpark code.
 Do NOT include markdown block markers (e.g. ```python).
 The final line MUST assign the result to: final_df
+USER QUESTION:
+{question}
 """
