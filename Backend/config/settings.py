@@ -16,7 +16,7 @@ from pydantic import Field, validator
 
 class Settings(BaseSettings):
     DOMAIN_WIKI_ROOTS: ClassVar[dict[str, str]] = {
-        "hr": "/Volumes/inaas_dev/raw_analytics/hr_context_doc"
+        "hr": "/Volumes/inaas_dev/raw_analytics/hr"
     }
 
     # =========================
