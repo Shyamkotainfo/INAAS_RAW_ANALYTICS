@@ -41,7 +41,7 @@ def _format_mappings(resolved_mappings: dict[str, str]) -> str:
 
 def _format_rule(business_rule: dict | None) -> str:
     if not business_rule:
-        return "No exact business rule matched the question."
+        return "None. Use schema-only reasoning and do not invent business logic."
 
     lines = []
     rule_name = business_rule.get("name", "unknown_rule")
@@ -105,10 +105,10 @@ You are generating executable PySpark code.
 AVAILABLE COLUMNS:
 {_format_columns(columns)}
 
-RESOLVED COLUMN MAPPINGS (MANDATORY):
+RESOLVED COLUMN MAPPINGS (USE WHEN PRESENT):
 {_format_mappings(resolved_mappings or {})}
 
-BUSINESS RULE (MANDATORY):
+BUSINESS RULE (USE WHEN PRESENT):
 {_format_rule(business_rule)}
 
 HARD GUARDRAILS:
@@ -121,8 +121,8 @@ HARD RULES:
 - NEVER invent column names.
 - ONLY use exact columns from AVAILABLE COLUMNS.
 - NEVER convert business concepts into fake columns.
-- RESOLVED COLUMN MAPPINGS are mandatory and override your guesses.
-- BUSINESS RULE is mandatory and must be applied exactly when present.
+- RESOLVED COLUMN MAPPINGS override your guesses when present.
+- BUSINESS RULE must be applied exactly when present.
 - If required fields are missing, return a one-row DataFrame with status = "CANNOT_COMPUTE" and a reason column.
 - NEVER use SQL.
 - ONLY use DataFrame API.

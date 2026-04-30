@@ -151,6 +151,7 @@ class PySparkCodeGenerator:
         guardrails = context.get("guardrails")
         semantic_context = context.get("semantic_context")
         resolved_terms = context.get("resolved_terms")
+        business_context_enabled = context.get("business_context_enabled", False)
 
         logger.info("QUESTION=%s", question)
         logger.info("AVAILABLE_COLUMNS=%s", columns)
@@ -159,6 +160,8 @@ class PySparkCodeGenerator:
         max_tokens = self._get_max_tokens(question, col_count)
         # Hard stop if no exact business rule was selected for the question.
         if not business_rule:
+        # Hard stop only when business context is enabled and no exact rule was selected.
+        if business_context_enabled and not business_rule:
             logger.warning("No business rule found - returning CANNOT_COMPUTE")
             return """
 final_df = df.limit(1).select(
