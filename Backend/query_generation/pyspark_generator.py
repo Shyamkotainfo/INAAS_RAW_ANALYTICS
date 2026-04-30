@@ -119,6 +119,25 @@ def load_business_rule(question: str, domain: str = "hr") -> dict | None:
     return selected_rule
 
 
+def _build_prompt_log_summary(
+    prompt: str,
+    resolved_mappings: dict[str, str],
+    business_rule: dict | None,
+    preview_chars: int = 400,
+) -> str:
+    compact_prompt = " ".join(prompt.split())
+    preview = compact_prompt[:preview_chars]
+    if len(compact_prompt) > preview_chars:
+        preview += "..."
+
+    return json.dumps({
+        "prompt_chars": len(prompt),
+        "rule_name": (business_rule or {}).get("name"),
+        "resolved_mappings": resolved_mappings,
+        "preview": preview,
+    }, sort_keys=True)
+
+
 class PySparkCodeGenerator:
     def __init__(self):
         self.llm = LLMQuery()
@@ -134,8 +153,18 @@ class PySparkCodeGenerator:
         logger.info("QUESTION=%s", question)
         logger.info("AVAILABLE_COLUMNS=%s", columns)
 
+        # Hard stop if no exact business rule was selected for the question.
+        if not business_rule:
+            logger.warning("No business rule found - returning CANNOT_COMPUTE")
+            return """
+final_df = df.limit(1).select(
+    F.lit("CANNOT_COMPUTE").alias("status"),
+    F.lit("No business rule defined for this metric").alias("reason")
+)
+"""
+
         missing_fields = self._get_missing_required_fields(business_rule, resolved_mappings)
-        if business_rule and missing_fields:
+        if missing_fields:
             safe_rule = dict(business_rule)
             safe_rule["missing_required_fields"] = missing_fields
             logger.warning(
@@ -158,8 +187,12 @@ class PySparkCodeGenerator:
         )
         max_tokens = self._get_max_tokens(col_count)
 
-        logger.info("FINAL_PROMPT=%s", prompt)
+        logger.info(
+            "FINAL_PROMPT_SUMMARY=%s",
+            _build_prompt_log_summary(prompt, resolved_mappings, business_rule)
+        )
         logger.info("Sending PySpark generation prompt to LLM (tokens=%d)", max_tokens)
+
         raw = self.llm.generate(prompt, max_tokens=max_tokens).strip()
         logger.info("Received PySpark code from LLM")
 
@@ -202,7 +235,14 @@ class PySparkCodeGenerator:
         )
         max_tokens = self._get_max_tokens(col_count)
 
-        logger.info("RETRY_PROMPT=%s", prompt)
+        logger.info(
+            "RETRY_PROMPT_SUMMARY=%s",
+            _build_prompt_log_summary(
+                prompt,
+                context.get("resolved_mappings") or {},
+                context.get("business_rule")
+            )
+        )
         logger.info("Sending PySpark correction prompt to LLM (attempt)")
         raw = self.llm.generate(prompt, max_tokens=max_tokens).strip()
         logger.info("Received corrected PySpark code from LLM")
@@ -263,7 +303,10 @@ class PySparkCodeGenerator:
             semantic_context=semantic_context
         )
 
-        logger.info("RETRY_PROMPT=%s", prompt)
+        logger.info(
+            "RETRY_PROMPT_SUMMARY=%s",
+            _build_prompt_log_summary(prompt, resolved_mappings, business_rule)
+        )
         logger.info("Repairing initial PySpark generation after validation failure")
         raw = self.llm.generate(prompt, max_tokens=max_tokens).strip()
 
@@ -282,22 +325,10 @@ class PySparkCodeGenerator:
 
     def _get_max_tokens(self, col_count: int = 0) -> int:
         return min(1200 + (max(0, col_count - 10) // 10 * 100), 4096)
-
+    
     def _sanitize(self, code: str) -> str:
-        cleaned = []
-        for line in code.splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            if stripped.startswith("```"):
-                continue
-            if stripped.startswith(("from ", "import ")):
-                continue
-            if stripped.lower().startswith(("here", "this code", "the following", "note:")):
-                continue
-            cleaned.append(stripped)
-
-        return "\n".join(cleaned)
+        from pyspark_utils.code_sanitizer import sanitize
+        return sanitize(code)
 
     def _validate(self, code: str) -> None:
         if not code:

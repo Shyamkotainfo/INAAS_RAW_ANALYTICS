@@ -1,5 +1,4 @@
 import posixpath
-from pathlib import Path
 
 from config.settings import settings
 from execution.databricks_executor import DatabricksExecutor
@@ -7,20 +6,18 @@ from logger.logger import get_logger
 
 logger = get_logger(__name__)
 
-LOCAL_DOMAIN_CONTEXT_ROOT = Path(__file__).resolve().parents[1] / "domain_context"
-
 
 WIKI_FILES = {
-    "attrition": "wiki/hr/support/attrition_logic.md",
-    "compensation": "wiki/hr/support/compensation_rules.md",
-    "performance": "wiki/hr/support/performance_logic.md",
-    "promotion": "wiki/hr/support/promotion_logic.md",
-    "retention": "wiki/hr/support/retention_risk_signals.md",
-    "aggregation": "wiki/hr/support/aggregation_rules.md",
-    "synonyms": "wiki/hr/support/synonym_mapping.md",
-    "time_windows": "wiki/hr/support/time_windows.md",
-    "reasoning": "wiki/hr/support/reasoning_examples.md",
-    "confidence": "wiki/hr/support/confidence_levels.md",
+    "attrition": "support/attrition_logic.md",
+    "compensation": "support/compensation_rules.md",
+    "performance": "support/performance_logic.md",
+    "promotion": "support/promotion_logic.md",
+    "retention": "support/retention_risk_signals.md",
+    "aggregation": "support/aggregation_rules.md",
+    "synonyms": "support/synonym_mapping.md",
+    "time_windows": "support/time_windows.md",
+    "reasoning": "support/reasoning_examples.md",
+    "confidence": "support/confidence_levels.md",
 }
 
 
@@ -150,16 +147,14 @@ def load_domain_context_text(domain: str, filename: str) -> str:
     """
     Load a structured domain-context artifact.
 
-    Runtime preference order:
-    1. Databricks Volume path (future production source of truth)
-    2. Local repo fallback under Backend/domain_context/<domain>/
+    Runtime source of truth:
+    1. Databricks Volume path only
     """
     candidates: list[str] = []
     wiki_root = settings.DOMAIN_WIKI_ROOTS.get(domain, "").strip()
     if wiki_root:
         normalized_root = wiki_root.replace("\\", "/").rstrip("/")
         candidates.append(posixpath.join(normalized_root, filename))
-        candidates.append(posixpath.join(normalized_root, "wiki", domain, filename))
 
     for candidate in candidates:
         try:
@@ -181,19 +176,9 @@ def load_domain_context_text(domain: str, filename: str) -> str:
                 str(exc)
             )
 
-    local_path = LOCAL_DOMAIN_CONTEXT_ROOT / domain / filename
-    if local_path.exists():
-        content = local_path.read_text(encoding="utf-8")
-        logger.info(
-            "Loaded domain context from local fallback | domain=%s | file=%s | path=%s | chars=%d",
-            domain,
-            filename,
-            str(local_path),
-            len(content)
-        )
-        return content
-
-    raise RuntimeError(f"Domain context file not found for domain={domain}, filename={filename}")
+    raise RuntimeError(
+        f"Domain context file not found in Databricks Volume for domain={domain}, filename={filename}"
+    )
 
 
 def retrieve_relevant_chunks(question: str, schema_columns: str, top_k: int = 1) -> str:

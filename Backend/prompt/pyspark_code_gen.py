@@ -118,6 +118,31 @@ HARD RULES:
 - ONLY use DataFrame API.
 - ALWAYS assign the final result to final_df.
 
+VALUE MATCHING RULES (CRITICAL):
+
+- NEVER rely on exact string matches for categorical values.
+- ALWAYS use case-insensitive matching using lower().
+
+- For voluntary exits:
+  match values containing:
+    "resign", "voluntary"
+
+- For involuntary exits:
+  match values containing:
+    "involuntary", "terminate"
+
+- For retirement:
+  match values containing:
+    "retire"
+
+- Example:
+  Instead of:
+    df["TerminationType"].isin(["Resigned"])
+  Use:
+    F.lower(F.col("TerminationType")).contains("resign")
+
+- Combine conditions using OR where appropriate.
+
 Before code, write only short # comments:
 # 1. columns used
 # 2. cleaning needed
