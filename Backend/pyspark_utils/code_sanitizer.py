@@ -14,10 +14,6 @@ def strip_code_fences(code: str) -> str:
 
 import re
 
-
-import re
-
-
 def rewrite_common_pyspark_imports(code: str) -> str:
     """
     Rewrite unsafe PySpark patterns into sandbox-safe equivalents.
@@ -46,4 +42,8 @@ def rewrite_common_pyspark_imports(code: str) -> str:
     )
 
     return code.strip()
-
+    
+def sanitize(code: str) -> str:
+    code = strip_code_fences(code)
+    code = rewrite_common_pyspark_imports(code)
+    return code.strip()
