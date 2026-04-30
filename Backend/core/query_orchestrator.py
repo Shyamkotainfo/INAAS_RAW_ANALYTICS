@@ -110,24 +110,32 @@ class QueryOrchestrator:
             "semantic_context": self.active_file.get("semantic_context"),
             "semantic_context_path": self.active_file.get("semantic_context_path"),
         }
+        business_context_enabled = bool(context.get("semantic_context_path"))
+        context["business_context_enabled"] = business_context_enabled
 
         columns = ", ".join(c["name"] for c in context["columns"])
-        context["resolved_mappings"] = resolve_columns(
-            available_columns=context["columns"],
-            domain="hr"
-        )
-        context["business_rule"] = load_business_rule(
-            question=user_input,
-            domain="hr"
-        )
-        context["guardrails"] = load_guardrails(domain="hr")
-        context["semantic_context"] = build_semantic_context(
-            question=user_input,
-            columns=columns,
-            top_k=1
-        )
+        context["resolved_mappings"] = {}
+        context["business_rule"] = None
+        context["guardrails"] = None
+        context["semantic_context"] = None
+
+        if business_context_enabled:
+            context["resolved_mappings"] = resolve_columns(
+                available_columns=context["columns"],
+                domain="hr"
+            )
+            context["business_rule"] = load_business_rule(
+                question=user_input,
+                domain="hr"
+            )
+            context["guardrails"] = load_guardrails(domain="hr")
+            context["semantic_context"] = build_semantic_context(
+                question=user_input,
+                columns=columns,
+                top_k=1
+            )
         self.active_file["semantic_context"] = context["semantic_context"]
-        self.active_file["semantic_context_hash"] = self._hash_text(context["semantic_context"])
+        self.active_file["semantic_context_hash"] = self._hash_text(context["semantic_context"] or "")
 
         context_debug = self._build_context_debug(context)
         logger.info(
@@ -139,6 +147,7 @@ class QueryOrchestrator:
         )
         logger.info("QUESTION=%s", user_input)
         logger.info("AVAILABLE_COLUMNS=%s", columns)
+        logger.info("BUSINESS_CONTEXT_ENABLED=%s", business_context_enabled)
         logger.info("RESOLVED_MAPPINGS=%s", context["resolved_mappings"])
         logger.info("SELECTED_BUSINESS_RULE=%s", context["business_rule"])
 
@@ -249,6 +258,7 @@ class QueryOrchestrator:
             "context_path": self.active_file.get("semantic_context_path") if self.active_file else None,
             "context_chars": len(semantic_context),
             "context_hash": self.active_file.get("semantic_context_hash") if self.active_file else None,
+            "business_context_enabled": context.get("business_context_enabled", False),
             "resolved_mappings": context.get("resolved_mappings") or {},
             "business_rule": context.get("business_rule"),
         }

@@ -1,22 +1,19 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from analytics.dataset_overview_generator import DatasetOverviewGenerator
+from config.settings import settings
 from core.query_orchestrator import QueryOrchestrator
 from logger.logger import get_logger
-from config.settings import settings
-from analytics.dataset_overview_generator import DatasetOverviewGenerator
 import uuid
 
 logger = get_logger(__name__)
 
 app = FastAPI(
     title="INAAS Analytics API",
-    version="2.0.0"
+    version="2.1.0"
 )
 
-# -------------------------------------------------
-# CORS (Allow all)
-# -------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,19 +22,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-orchestrator = QueryOrchestrator()
 overview_generator = DatasetOverviewGenerator()
 VOLUME_BASE = settings.databricks_volume_base
+upload_orchestrator = QueryOrchestrator()
+dataset_sessions: dict[str, QueryOrchestrator] = {}
 
-
-# =====================================================
-# MODELS
-# =====================================================
 
 class StartProfilingRequest(BaseModel):
     dataset_id: str
     file_path: str
     file_format: str
+    business_context: str | None = None
 
 
 class QueryRequest(BaseModel):
@@ -45,18 +40,10 @@ class QueryRequest(BaseModel):
     user_input: str
 
 
-# =====================================================
-# HEALTH
-# =====================================================
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-
-# =====================================================
-# 1️⃣ UPLOAD (Stateless)
-# =====================================================
 
 @app.post("/upload")
 async def upload_dataset(
@@ -69,15 +56,14 @@ async def upload_dataset(
         if file:
             temp_path = f"/tmp/{file.filename}"
 
-            with open(temp_path, "wb") as f:
+            with open(temp_path, "wb") as handle:
                 while chunk := await file.read(1024 * 1024):
-                    f.write(chunk)
+                    handle.write(chunk)
 
-            volume_path = orchestrator.executor.upload_to_volume(
+            volume_path = upload_orchestrator.executor.upload_to_volume(
                 local_path=temp_path,
                 volume_base_path=VOLUME_BASE
             )
-
         elif file_path:
             volume_path = file_path
         else:
@@ -93,68 +79,76 @@ async def upload_dataset(
             "dataset_id": dataset_id,
             "file_path": volume_path,
             "file_format": detected_format,
-            "message": "Upload successful. Pass these values to /start-profiling."
+            "message": "Upload successful. Pass dataset_id, file_path, and file_format to /start-profiling."
         }
-
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception as exc:
         logger.exception("Upload failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(exc))
 
-
-# =====================================================
-# 2️⃣ START PROFILING (Stateless)
-# =====================================================
 
 @app.post("/start-profiling")
 def start_profiling(request: StartProfilingRequest):
-
     try:
+        selected_context = (request.business_context or "none").strip().lower()
+        if selected_context not in {"none", "hr"}:
+            raise HTTPException(
+                status_code=400,
+                detail="business_context must be either 'none' or 'hr'"
+            )
 
-        # Step 1 — Run profiling
-        profiling = orchestrator.attach_file(
+        semantic_context = None
+        if selected_context == "hr":
+            semantic_context = settings.DOMAIN_WIKI_ROOTS.get("hr")
+
+        session_orchestrator = QueryOrchestrator()
+        profiling = session_orchestrator.attach_file(
             file_id=request.dataset_id,
             file_path=request.file_path,
-            file_format=request.file_format
+            file_format=request.file_format,
+            context=semantic_context
         )
+        dataset_sessions[request.dataset_id] = session_orchestrator
 
-        # Step 2 — Generate overview using LLM
         overview = overview_generator.generate(profiling)
 
-        # Step 3 — Return response
         return {
             "success": True,
             "dataset_id": request.dataset_id,
+            "business_context": selected_context,
             "overview": overview,
             "profiling": profiling
         }
-
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception as exc:
         logger.exception("Profiling failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(exc))
 
-# =====================================================
-# 3️⃣ RUN QUERY (Stateless)
-# =====================================================
 
 @app.post("/query")
 def run_query(request: QueryRequest):
-
     try:
-        response = orchestrator.run(
+        session_orchestrator = dataset_sessions.get(request.dataset_id)
+        if not session_orchestrator:
+            raise HTTPException(
+                status_code=404,
+                detail="Dataset session not found. Call /start-profiling first for this dataset_id."
+            )
+
+        response = session_orchestrator.run(
             user_input=request.user_input,
             dataset_id=request.dataset_id
         )
 
-        # Check if the orchestrator returned a known failure marker
         is_success = not response.get("error") and not response.get("irrelevant")
-
-        # Always return 200 — the response dict carries structured
-        # status (irrelevant, error, or full result) for the frontend to handle.
         return {
             "success": is_success,
             "data": response
         }
-
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception as exc:
         logger.exception("Query failed with unexpected error")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(exc))
