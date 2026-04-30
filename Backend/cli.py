@@ -1,9 +1,9 @@
 from core.query_orchestrator import QueryOrchestrator
 from analytics.dataset_overview_generator import DatasetOverviewGenerator
+from config.settings import settings
 import json
 import shlex
 import uuid
-from config.settings import settings
 
 
 def detect_format(path: str):
@@ -11,10 +11,8 @@ def detect_format(path: str):
 
     if path.endswith(".csv"):
         return "csv"
-
     if path.endswith(".parquet"):
         return "parquet"
-
     if path.endswith(".json"):
         return "json"
 
@@ -22,7 +20,6 @@ def detect_format(path: str):
 
 
 def main():
-
     print("\n" + "=" * 60)
     print("INAAS - RAW Mode (CLI)")
     print("=" * 60)
@@ -38,13 +35,10 @@ def main():
     overview_generator = DatasetOverviewGenerator()
 
     VOLUME_BASE = settings.databricks_volume_base
-
     current_dataset_id = None
 
     while True:
-
         try:
-
             user_input = input("\n> ").strip()
 
             if not user_input:
@@ -54,9 +48,9 @@ def main():
                 print("Goodbye!")
                 break
 
-            # ----------------------------------
-            # Upload Command
-            # ----------------------------------
+            # ==================================================
+            # UPLOAD COMMAND
+            # ==================================================
             if user_input.startswith("upload "):
 
                 try:
@@ -72,6 +66,11 @@ def main():
                     print("  upload local <csv_path> <context_json_path>")
                     print("  upload local <file_path> [optional_context_json_path]")
                     print("  upload url <volume_path>")
+                parts = user_input.split(" ", 2)
+
+                if len(parts) < 3:
+                    print("Invalid command.")
+                    print("Use: upload local <file_path> OR upload url <volume_path>")
                     continue
 
                 mode = parts[1].lower()
@@ -117,14 +116,13 @@ def main():
 
                 file_id = f"cli_{uuid.uuid4().hex[:6]}"
 
-                # ------------------------------------------
-                # Local file upload
-                # ------------------------------------------
+                # -----------------------------
+                # LOCAL FILE UPLOAD
+                # -----------------------------
                 if mode == "local":
-
                     file_format = detect_format(path)
 
-                    print("Uploading file to Databricks Volume...")
+                    print("\nUploading file to Databricks Volume...")
 
                     volume_path = orchestrator.executor.upload_to_volume(
                         local_path=path,
@@ -133,36 +131,36 @@ def main():
 
                     print(f"Uploaded to: {volume_path}")
 
+                    # 🔥 SAME AS FASTAPI LOGIC
                     print("\nSelect Business Context:")
                     print("1. HR")
                     print("2. None")
 
                     choice = input("Enter choice: ").strip()
+
                     domain_map = {
                         "1": "hr",
                         "2": None
                     }
+
                     selected_domain = domain_map.get(choice)
 
                     if choice not in domain_map:
-                        print("Invalid choice. Defaulting to no business context.")
+                        print("Invalid choice. Defaulting to no context.")
 
                     semantic_context = None
                     if selected_domain:
                         semantic_context = settings.DOMAIN_WIKI_ROOTS.get(selected_domain)
 
-                # ------------------------------------------
-                # Volume path
-                # ------------------------------------------
-                else:
-
+                elif mode == "url":
                     volume_path = path
                     file_format = detect_format(volume_path)
                     semantic_context = None
 
-                # ------------------------------------------
-                # Run profiling
-                # ------------------------------------------
+
+                # -----------------------------
+                # PROFILING
+                # -----------------------------
                 profiling = orchestrator.attach_file(
                     file_id=file_id,
                     file_path=volume_path,
@@ -171,29 +169,24 @@ def main():
                     context=semantic_context
                 )
 
-                # ------------------------------------------
-                # Generate dataset overview (LLM)
-                # ------------------------------------------
                 overview = overview_generator.generate(profiling)
 
-                print("\nFile uploaded and profiled successfully.\n")
+                print("\n✅ File uploaded and profiled successfully.\n")
 
-                result = {
+                print(json.dumps({
                     "dataset_id": file_id,
                     "overview": overview,
                     "profiling": profiling
-                }
-
-                print(json.dumps(result, indent=2))
+                }, indent=2))
 
                 current_dataset_id = file_id
                 continue
 
-            # ----------------------------------
-            # Normal Question
-            # ----------------------------------
+            # ==================================================
+            # QUERY
+            # ==================================================
             if not current_dataset_id:
-                print("Please upload a file first.")
+                print("⚠️  Please upload a file first.")
                 continue
 
             response = orchestrator.run(user_input, current_dataset_id)
@@ -206,8 +199,17 @@ def main():
 
             if response.get("error") and not response.get("results"):
                 print("Query failed after all retries.")
+                print("⚠️ " + response.get("message", "Question not related to dataset"))
+                continue
+
+            if response.get("error") and not response.get("results"):
+                print("❌ Query failed after all retries.")
 
             print(json.dumps(response, indent=2))
 
         except Exception as e:
-            print("\nERROR:", str(e))
+            print("\n❌ ERROR:", str(e))
+
+
+if __name__ == "__main__":
+    main()
