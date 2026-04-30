@@ -6,6 +6,7 @@ from config.settings import settings
 from core.query_orchestrator import QueryOrchestrator
 from logger.logger import get_logger
 import uuid
+import os
 
 logger = get_logger(__name__)
 
@@ -44,7 +45,6 @@ class QueryRequest(BaseModel):
 def health():
     return {"status": "ok"}
 
-
 @app.post("/upload")
 async def upload_dataset(
     file: UploadFile = File(None),
@@ -53,8 +53,12 @@ async def upload_dataset(
     try:
         dataset_id = f"ds_{uuid.uuid4().hex[:6]}"
 
+        # 🔥 FIX: cross-platform temp directory
+        temp_dir = os.path.join(os.getcwd(), "temp_uploads")
+        os.makedirs(temp_dir, exist_ok=True)
+
         if file:
-            temp_path = f"/tmp/{file.filename}"
+            temp_path = os.path.join(temp_dir, file.filename)
 
             with open(temp_path, "wb") as handle:
                 while chunk := await file.read(1024 * 1024):
@@ -64,8 +68,10 @@ async def upload_dataset(
                 local_path=temp_path,
                 volume_base_path=VOLUME_BASE
             )
+
         elif file_path:
             volume_path = file_path
+
         else:
             raise HTTPException(
                 status_code=400,
@@ -81,12 +87,12 @@ async def upload_dataset(
             "file_format": detected_format,
             "message": "Upload successful. Pass dataset_id, file_path, and file_format to /start-profiling."
         }
+
     except HTTPException:
         raise
     except Exception as exc:
         logger.exception("Upload failed")
         raise HTTPException(status_code=500, detail=str(exc))
-
 
 @app.post("/start-profiling")
 def start_profiling(request: StartProfilingRequest):
