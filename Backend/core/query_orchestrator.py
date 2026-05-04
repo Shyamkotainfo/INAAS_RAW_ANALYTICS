@@ -1,11 +1,20 @@
 # Backend/core/query_orchestrator.py
 
+import hashlib
+
 from logger.logger import get_logger
 from execution.databricks_executor import DatabricksExecutor
 from ingestion.metadata_uploader import MetadataUploader
 from rag.bedrock_ingestor import trigger_bedrock_ingestion
 from config.settings import settings
-from query_generation.pyspark_generator import PySparkCodeGenerator, IrrelevantQueryError
+from prompt.pyspark_code_gen import build_semantic_context
+from query_generation.pyspark_generator import (
+    PySparkCodeGenerator,
+    IrrelevantQueryError,
+    load_business_rule,
+    load_guardrails,
+    resolve_columns,
+)
 from summarization.result_summarizer import ResultSummarizer
 
 logger = get_logger(__name__)
@@ -24,7 +33,7 @@ class QueryOrchestrator:
     # =====================================================
     # FILE INGESTION
     # =====================================================
-    def attach_file(self, file_id: str, file_path: str, file_format: str):
+    def attach_file(self, file_id: str, file_path: str, file_format: str, context: str = None):
 
         logger.info("Starting ingestion for file: %s", file_path)
 
@@ -42,6 +51,12 @@ class QueryOrchestrator:
 
         schema = ingestion["schema"]
         profiling = ingestion["profiling"]
+
+        semantic_context = None
+        semantic_context_hash = None
+        if context:
+            logger.info("Wiki root configured for targeted retrieval: %s", context)
+            schema["semantic_context_path"] = context
 
         # ----------------------------
         # Upload schema to S3
@@ -72,7 +87,10 @@ class QueryOrchestrator:
             "file_id": file_id,
             "file_path": file_path,
             "format": file_format,
-            "columns": schema["columns"]
+            "columns": schema["columns"],
+            "semantic_context": semantic_context,
+            "semantic_context_path": context,
+            "semantic_context_hash": semantic_context_hash
         }
 
         return profiling
@@ -88,8 +106,50 @@ class QueryOrchestrator:
         context = {
             "file_path": self.active_file["file_path"],
             "format": self.active_file["format"],
-            "columns": self.active_file["columns"]
+            "columns": self.active_file["columns"],
+            "semantic_context": self.active_file.get("semantic_context"),
+            "semantic_context_path": self.active_file.get("semantic_context_path"),
         }
+        business_context_enabled = bool(context.get("semantic_context_path"))
+        context["business_context_enabled"] = business_context_enabled
+
+        columns = ", ".join(c["name"] for c in context["columns"])
+        context["resolved_mappings"] = {}
+        context["business_rule"] = None
+        context["guardrails"] = None
+        context["semantic_context"] = None
+
+        if business_context_enabled:
+            context["resolved_mappings"] = resolve_columns(
+                available_columns=context["columns"],
+                domain="hr"
+            )
+            context["business_rule"] = load_business_rule(
+                question=user_input,
+                domain="hr"
+            )
+            context["guardrails"] = load_guardrails(domain="hr")
+            context["semantic_context"] = build_semantic_context(
+                question=user_input,
+                columns=columns,
+                top_k=1
+            )
+        self.active_file["semantic_context"] = context["semantic_context"]
+        self.active_file["semantic_context_hash"] = self._hash_text(context["semantic_context"] or "")
+
+        context_debug = self._build_context_debug(context)
+        logger.info(
+            "Passing semantic context to LLM | used=%s | path=%s | chars=%d | hash=%s",
+            context_debug["context_used"],
+            context_debug["context_path"],
+            context_debug["context_chars"],
+            context_debug["context_hash"]
+        )
+        logger.info("QUESTION=%s", user_input)
+        logger.info("AVAILABLE_COLUMNS=%s", columns)
+        logger.info("BUSINESS_CONTEXT_ENABLED=%s", business_context_enabled)
+        logger.info("RESOLVED_MAPPINGS=%s", context["resolved_mappings"])
+        logger.info("SELECTED_BUSINESS_RULE=%s", context["business_rule"])
 
         # --------------------------------------------------
         # Step 1 — Relevance guard + initial code generation
@@ -110,6 +170,7 @@ class QueryOrchestrator:
                 "results": None,
                 "insights": None,
                 "text_results": None,
+                "context_debug": context_debug,
             }
 
         # --------------------------------------------------
@@ -142,6 +203,7 @@ class QueryOrchestrator:
                     "insights": summary,
                     "text_results": text_results,
                     "attempts": attempt,
+                    "context_debug": context_debug,
                 }
 
             # FAILED — capture error and try to correct
@@ -186,4 +248,20 @@ class QueryOrchestrator:
             "insights": None,
             "text_results": None,
             "attempts": MAX_RETRIES,
+            "context_debug": context_debug,
         }
+
+    def _build_context_debug(self, context: dict) -> dict:
+        semantic_context = context.get("semantic_context") or ""
+        return {
+            "context_used": bool(semantic_context),
+            "context_path": self.active_file.get("semantic_context_path") if self.active_file else None,
+            "context_chars": len(semantic_context),
+            "context_hash": self.active_file.get("semantic_context_hash") if self.active_file else None,
+            "business_context_enabled": context.get("business_context_enabled", False),
+            "resolved_mappings": context.get("resolved_mappings") or {},
+            "business_rule": context.get("business_rule"),
+        }
+
+    def _hash_text(self, text: str) -> str:
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]

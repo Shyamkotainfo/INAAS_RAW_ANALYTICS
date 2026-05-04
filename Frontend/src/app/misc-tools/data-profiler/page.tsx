@@ -170,7 +170,7 @@ export default function DataExplorer() {
   // };
   const handleCreateTask = async (task: {
     name: string;
-    description: string;
+    domain: string;
     file?: File; // IMPORTANT: must receive actual File
     file_url?: string
   }) => {
@@ -187,6 +187,7 @@ export default function DataExplorer() {
       // Navigate to task page using returned dataset_id
       sessionStorage.setItem("profilingUpload", JSON.stringify(result));
 
+      sessionStorage.setItem("profilingDomain", task.domain);
       navigate.push(
         `/misc-tools/data-profiler/task`
       );

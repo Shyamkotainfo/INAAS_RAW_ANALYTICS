@@ -8,13 +8,17 @@ Supports:
 """
 
 import os
-from typing import Optional
+from typing import ClassVar, Optional
 from functools import lru_cache
 from pydantic_settings import BaseSettings
 from pydantic import Field, validator
 
 
 class Settings(BaseSettings):
+    DOMAIN_WIKI_ROOTS: ClassVar[dict[str, str]] = {
+        "hr": "/Volumes/inaas_dev/raw_analytics/hr"
+    }
+
     # =========================
     # Environment
     # =========================

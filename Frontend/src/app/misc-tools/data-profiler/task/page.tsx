@@ -98,13 +98,15 @@ export default function ExplorationTaskDetail() {
 
       const stored = sessionStorage.getItem("profilingUpload");
       const profiling = stored ? JSON.parse(stored) : null;
-
+      const storedDomain = sessionStorage.getItem("profilingDomain");
+      const domain = storedDomain ? storedDomain: undefined;
       setUploadData(profiling);
 
       const result = await apiService.getDatasetProfiling(
         profiling.dataset_id,
         profiling.file_path,
-        profiling.file_format
+        profiling.file_format,
+        domain
       );
 
       if (result.success) setData(result);
