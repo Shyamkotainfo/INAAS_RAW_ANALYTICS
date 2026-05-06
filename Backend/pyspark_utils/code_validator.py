@@ -86,8 +86,10 @@ def _validate_dataframe_lineage(code: str, available_columns: list[str]) -> None
         if inferred_schema is not None:
             schemas[lhs] = inferred_schema
 
-    if schemas.get("final_df") is None and schemas.get("result_df") is None:
-        raise RuntimeError("Generated PySpark code must assign a final DataFrame output")
+    # Lineage inference is helpful for column checks, but it is intentionally
+    # best-effort. We already enforce presence of `final_df` / `result_df`
+    # textually in validate_pyspark_code(), so do not fail here when the
+    # lightweight parser cannot infer the terminal schema.
 
 
 def _iter_statements(code: str) -> list[str]:

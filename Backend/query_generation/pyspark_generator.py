@@ -9,7 +9,6 @@ from prompt.pyspark_code_gen import get_pyspark_prompt
 from prompt.pyspark_correction import get_correction_prompt
 from prompt.relevance_guard import get_relevance_prompt
 from pyspark_utils.code_validator import validate_pyspark_code
-from prompt.wiki_retriever import load_domain_context_text
 from prompt.wiki_retriever import load_domain_context_text, try_load_domain_context_text
 
 logger = get_logger(__name__)
@@ -162,14 +161,10 @@ class PySparkCodeGenerator:
         business_rule = context.get("business_rule")
         guardrails = context.get("guardrails")
         semantic_context = context.get("semantic_context")
-        resolved_terms = context.get("resolved_terms")
         business_context_enabled = context.get("business_context_enabled", False)
 
         logger.info("QUESTION=%s", question)
         logger.info("AVAILABLE_COLUMNS=%s", columns)
-
-        prompt = get_pyspark_prompt(columns, question, semantic_context, resolved_terms)
-        max_tokens = self._get_max_tokens(question, col_count)
         # Hard stop only when business context is enabled and structured rules exist
         # for the selected domain but none matched the question.
         if business_context_enabled and context.get("structured_rules_available") and not business_rule:
@@ -219,9 +214,8 @@ final_df = df.limit(1).select(
         print("\n=======================================\n")
 
         code = self._sanitize(raw)
-        self._validate(code, context)
         try:
-            self._validate(code)
+            self._validate(code, context)
         except RuntimeError as exc:
             logger.warning("Initial PySpark generation failed validation: %s", str(exc))
             code = self._repair_initial_generation(
@@ -246,26 +240,12 @@ final_df = df.limit(1).select(
 
         columns = self._require_columns(context)
         col_count = len(context["columns"])
-        semantic_context = context.get("semantic_context")
-        resolved_terms = context.get("resolved_terms")
 
         prompt = get_correction_prompt(
             columns=columns,
             question=question,
             failing_code=failing_code,
             error_message=error_message,
-            semantic_context=semantic_context,
-            resolved_terms=resolved_terms
-        )
-
-        max_tokens = self._get_max_tokens(question, col_count)
-
-        logger.info(
-            "LLM correction prompt built | semantic_context_present=%s | context_chars=%d | marker_in_prompt=%s | prompt_chars=%d",
-            bool(semantic_context),
-            len(semantic_context or ""),
-            "CONTEXT_MARKER" in prompt,
-            len(prompt)
             resolved_mappings=context.get("resolved_mappings") or {},
             business_rule=context.get("business_rule"),
             guardrails=context.get("guardrails"),
@@ -291,8 +271,6 @@ final_df = df.limit(1).select(
 
         code = self._sanitize(raw)
         self._validate(code, context)
-
-        self._validate(code)
         return code
 
     def _check_relevance(self, question: str, columns: str) -> bool:
@@ -1414,11 +1392,7 @@ final_df = (
     # --------------------------------------------------
     # PRIVATE: validate generated code
     # --------------------------------------------------
-    def _validate(self, code: str, context: dict) -> None:
-        """
-        Raise RuntimeError if the code is structurally invalid.
-        """
-    def _validate(self, code: str) -> None:
+    def _validate(self, code: str, context: dict | None = None) -> None:
         if not code:
             raise RuntimeError("Generated PySpark code is empty after sanitization")
         if "final_df" not in code:
@@ -1431,10 +1405,11 @@ final_df = (
         if "df.count()" in code:
             raise RuntimeError("Generated PySpark code uses df.count() which is forbidden")
 
-        validate_pyspark_code(
-            code,
-            available_columns=[c["name"] for c in context.get("columns", [])]
-        )
+        available_columns = None
+        if context and context.get("columns"):
+            available_columns = [c["name"] for c in context.get("columns", [])]
+
+        validate_pyspark_code(code, available_columns=available_columns)
     def _get_missing_required_fields(
         self,
         business_rule: dict | None,
