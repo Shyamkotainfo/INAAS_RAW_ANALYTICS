@@ -134,13 +134,15 @@ def main():
                     # 🔥 SAME AS FASTAPI LOGIC
                     print("\nSelect Business Context:")
                     print("1. HR")
-                    print("2. None")
+                    print("2. Manufacturing")
+                    print("3. None")
 
                     choice = input("Enter choice: ").strip()
 
                     domain_map = {
                         "1": "hr",
-                        "2": None
+                        "2": "manufacturing",
+                        "3": None
                     }
 
                     selected_domain = domain_map.get(choice)
@@ -167,6 +169,8 @@ def main():
                     file_format=file_format,
                     context=context_str if mode == "local" else None
                     context=semantic_context
+                    context=semantic_context,
+                    domain=selected_domain if mode == "local" else None
                 )
 
                 overview = overview_generator.generate(profiling)

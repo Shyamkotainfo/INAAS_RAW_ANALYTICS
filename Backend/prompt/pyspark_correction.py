@@ -130,6 +130,14 @@ FAILING CODE
 OPTIONAL SUPPORTING CONTEXT:
 {(semantic_context or "None").strip()}
 
+AVAILABLE HELPERS:
+- as_text("column_name"): trimmed string value
+- as_double("column_name"): numeric cast that handles values like "93,97"
+- as_int("column_name"): integer cast built from as_double
+- as_date("column_name"): date cast for yyyy-mm-dd and timestamp-like strings
+- as_bool_flag("column_name"): boolean cast for TRUE/FALSE/1/0 text flags
+- as_priority_rank("column_name"): maps High/Medium/Low text priority to 3/2/1
+
 FAILING CODE:
 {failing_code}
 
@@ -145,6 +153,9 @@ HARD RULES:
 - If required fields are missing, return a one-row DataFrame with status = "CANNOT_COMPUTE" and a reason column.
 - NEVER use SQL.
 - ONLY use DataFrame API.
+- When comparing, sorting, or aggregating string-encoded numeric/date/flag columns, use the helper functions first.
+- NEVER redefine helper functions such as as_date, as_double, as_int, as_bool_flag, or as_priority_rank.
+- If a priority column contains labels like High, Medium, Low, rank it with as_priority_rank instead of casting it to int.
 - ALWAYS assign the final result to final_df.
 
 1. Read the error message carefully. Identify the ROOT CAUSE:

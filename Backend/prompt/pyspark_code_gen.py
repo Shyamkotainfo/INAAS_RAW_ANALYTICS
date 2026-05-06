@@ -1,4 +1,4 @@
-from prompt.wiki_retriever import retrieve_relevant_chunks
+from prompt.wiki_retriever import load_domain_semantic_context, retrieve_relevant_chunks
 
 
 def get_pyspark_prompt(
@@ -11,12 +11,15 @@ def get_pyspark_prompt(
 
 
 # def build_semantic_context(question: str, columns: str, top_k: int = 3) -> str:
-def build_semantic_context(question: str, columns: str, top_k: int = 1) -> str:
+def build_semantic_context(domain: str | None, question: str, columns: str, top_k: int = 1) -> str:
     """
     Optional supporting context only.
     This is allowed to provide glossary and narrative support, but it is not the
     primary semantic source for business-rule enforcement.
     """
+    if domain and domain != "hr":
+        return load_domain_semantic_context(domain)
+
     return retrieve_relevant_chunks(
         question=question,
         schema_columns=columns,
@@ -117,6 +120,14 @@ HARD GUARDRAILS:
 OPTIONAL SUPPORTING CONTEXT:
 {_format_supporting_context(semantic_context)}
 
+AVAILABLE HELPERS:
+- as_text("column_name"): trimmed string value
+- as_double("column_name"): numeric cast that handles values like "93,97"
+- as_int("column_name"): integer cast built from as_double
+- as_date("column_name"): date cast for yyyy-mm-dd and timestamp-like strings
+- as_bool_flag("column_name"): boolean cast for TRUE/FALSE/1/0 text flags
+- as_priority_rank("column_name"): maps High/Medium/Low text priority to 3/2/1
+
 HARD RULES:
 - NEVER invent column names.
 - ONLY use exact columns from AVAILABLE COLUMNS.
@@ -126,6 +137,9 @@ HARD RULES:
 - If required fields are missing, return a one-row DataFrame with status = "CANNOT_COMPUTE" and a reason column.
 - NEVER use SQL.
 - ONLY use DataFrame API.
+- When comparing, sorting, or aggregating string-encoded numeric/date/flag columns, use the helper functions first.
+- NEVER redefine helper functions such as as_date, as_double, as_int, as_bool_flag, or as_priority_rank.
+- If a priority column contains labels like High, Medium, Low, rank it with as_priority_rank instead of casting it to int.
 - ALWAYS assign the final result to final_df.
 
 MODE B — ANALYTICAL (everything else):

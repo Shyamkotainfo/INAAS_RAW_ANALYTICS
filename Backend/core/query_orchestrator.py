@@ -36,7 +36,14 @@ class QueryOrchestrator:
     # =====================================================
     # FILE INGESTION
     # =====================================================
-    def attach_file(self, file_id: str, file_path: str, file_format: str, context: str = None):
+    def attach_file(
+        self,
+        file_id: str,
+        file_path: str,
+        file_format: str,
+        context: str = None,
+        domain: str = None
+    ):
 
         logger.info("Starting ingestion for file: %s", file_path)
 
@@ -59,9 +66,12 @@ class QueryOrchestrator:
             schema["semantic_context"] = context
         semantic_context = None
         semantic_context_hash = None
+        selected_domain = domain or self._resolve_domain_from_context(context)
         if context:
             logger.info("Wiki root configured for targeted retrieval: %s", context)
             schema["semantic_context_path"] = context
+        if selected_domain:
+            schema["business_context_domain"] = selected_domain
 
         # ----------------------------
         # Upload schema to S3
@@ -96,7 +106,8 @@ class QueryOrchestrator:
             "semantic_context": schema.get("semantic_context"),
             "semantic_context": semantic_context,
             "semantic_context_path": context,
-            "semantic_context_hash": semantic_context_hash
+            "semantic_context_hash": semantic_context_hash,
+            "business_context_domain": selected_domain
         }
 
         return profiling
@@ -115,6 +126,7 @@ class QueryOrchestrator:
             "columns": self.active_file["columns"],
             "semantic_context": self.active_file.get("semantic_context"),
             "semantic_context_path": self.active_file.get("semantic_context_path"),
+            "business_context_domain": self.active_file.get("business_context_domain"),
         }
         context["resolved_terms"] = self._resolve_schema_terms(context)
         semantic_column_error = self._detect_unavailable_semantic_column(user_input, context)
@@ -132,6 +144,10 @@ class QueryOrchestrator:
             }
         analysis_note = self._build_analysis_note(user_input, context)
         business_context_enabled = bool(context.get("semantic_context_path"))
+        business_context_enabled = bool(
+            context.get("semantic_context_path")
+            or context.get("business_context_domain")
+        )
         context["business_context_enabled"] = business_context_enabled
 
         columns = ", ".join(c["name"] for c in context["columns"])
@@ -139,22 +155,27 @@ class QueryOrchestrator:
         context["business_rule"] = None
         context["guardrails"] = None
         context["semantic_context"] = None
+        selected_domain = context.get("business_context_domain")
+        structured_rules_available = False
 
-        if business_context_enabled:
+        if business_context_enabled and selected_domain:
             context["resolved_mappings"] = resolve_columns(
                 available_columns=context["columns"],
-                domain="hr"
+                domain=selected_domain
             )
             context["business_rule"] = load_business_rule(
                 question=user_input,
-                domain="hr"
+                domain=selected_domain
             )
-            context["guardrails"] = load_guardrails(domain="hr")
+            context["guardrails"] = load_guardrails(domain=selected_domain)
+            structured_rules_available = bool(context["resolved_mappings"] or context["business_rule"] or context["guardrails"])
             context["semantic_context"] = build_semantic_context(
+                domain=selected_domain,
                 question=user_input,
                 columns=columns,
                 top_k=1
             )
+        context["structured_rules_available"] = structured_rules_available
         self.active_file["semantic_context"] = context["semantic_context"]
         self.active_file["semantic_context_hash"] = self._hash_text(context["semantic_context"] or "")
 
@@ -169,6 +190,8 @@ class QueryOrchestrator:
         logger.info("QUESTION=%s", user_input)
         logger.info("AVAILABLE_COLUMNS=%s", columns)
         logger.info("BUSINESS_CONTEXT_ENABLED=%s", business_context_enabled)
+        logger.info("BUSINESS_CONTEXT_DOMAIN=%s", selected_domain)
+        logger.info("STRUCTURED_RULES_AVAILABLE=%s", structured_rules_available)
         logger.info("RESOLVED_MAPPINGS=%s", context["resolved_mappings"])
         logger.info("SELECTED_BUSINESS_RULE=%s", context["business_rule"])
 
@@ -200,7 +223,10 @@ class QueryOrchestrator:
         last_error = None
         last_code = pyspark_code
 
+        attempts_made = 0
+
         for attempt in range(1, MAX_RETRIES + 1):
+            attempts_made = attempt
             logger.info("Execution attempt %d / %d", attempt, MAX_RETRIES)
 
             execution = self.executor.execute_query(context, last_code)
@@ -225,6 +251,7 @@ class QueryOrchestrator:
                     "text_results": text_results,
                     "analysis_note": analysis_note,
                     "attempts": attempt,
+                    "attempts": attempts_made,
                     "context_debug": context_debug,
                 }
 
@@ -234,6 +261,14 @@ class QueryOrchestrator:
             logger.warning(
                 "Execution attempt %d failed: %s", attempt, last_error
             )
+
+            if not self._is_retriable_execution_error(last_error):
+                logger.error(
+                    "Encountered non-retriable execution error on attempt %d: %s",
+                    attempt,
+                    last_error
+                )
+                break
 
             if attempt < MAX_RETRIES:
                 logger.info("Requesting LLM correction for attempt %d", attempt + 1)
@@ -271,6 +306,7 @@ class QueryOrchestrator:
             "text_results": None,
             "analysis_note": analysis_note,
             "attempts": MAX_RETRIES,
+            "attempts": attempts_made,
             "context_debug": context_debug,
         }
 
@@ -458,9 +494,39 @@ class QueryOrchestrator:
             "context_chars": len(semantic_context),
             "context_hash": self.active_file.get("semantic_context_hash") if self.active_file else None,
             "business_context_enabled": context.get("business_context_enabled", False),
+            "business_context_domain": context.get("business_context_domain"),
+            "structured_rules_available": context.get("structured_rules_available", False),
             "resolved_mappings": context.get("resolved_mappings") or {},
             "business_rule": context.get("business_rule"),
         }
 
     def _hash_text(self, text: str) -> str:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+    def _resolve_domain_from_context(self, context: str | None) -> str | None:
+        if not context:
+            return None
+
+        normalized_context = context.replace("\\", "/").rstrip("/")
+        for domain, root in settings.DOMAIN_WIKI_ROOTS.items():
+            if normalized_context == root.replace("\\", "/").rstrip("/"):
+                return domain
+        return None
+
+    def _is_retriable_execution_error(self, error_message: str | None) -> bool:
+        if not error_message:
+            return True
+
+        normalized_error = error_message.lower()
+        non_retriable_markers = [
+            "modulenotfounderror",
+            "no module named",
+            "databricks job submission failed",
+            "databricks job failed:",
+            "cluster_id is not configured",
+            "job script paths are not configured",
+            "semantic context must be a databricks volume path",
+            "no logs returned from databricks",
+        ]
+
+        return not any(marker in normalized_error for marker in non_retriable_markers)

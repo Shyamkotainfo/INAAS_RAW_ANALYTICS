@@ -1,6 +1,14 @@
 import os
 import base64
+import sys
 import requests
+import base64
+
+CURRENT_DIR = os.path.dirname(__file__)
+BACKEND_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
+if BACKEND_ROOT not in sys.path:
+    sys.path.insert(0, BACKEND_ROOT)
+
 from config.settings import settings
 
 SCRIPT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -23,18 +31,31 @@ def sync_file_to_volume(local_path, target_path):
     with open(local_path, "rb") as f:
         file_bytes = f.read()
 
-    url = f"https://{settings.databricks_host}/api/2.0/fs/files{target_path}"
+    headers = {
+        "Authorization": f"Bearer {settings.databricks_token}",
+    }
 
-    print(f"Uploading to Databricks volume: {target_path}")
-    resp = requests.put(
-        url,
-        headers={
-            "Authorization": f"Bearer {settings.databricks_token}",
-            "Content-Type": "application/octet-stream"
-        },
-        data=file_bytes,
-        params={"overwrite": "true"}
-    )
+    if target_path.startswith("dbfs:/"):
+        url = f"https://{settings.databricks_host}/api/2.0/dbfs/put"
+        payload = {
+            "path": target_path,
+            "overwrite": True,
+            "contents": base64.b64encode(file_bytes).decode("ascii"),
+        }
+        print(f"Uploading to Databricks DBFS: {target_path}")
+        resp = requests.post(url, headers=headers, json=payload)
+    else:
+        url = f"https://{settings.databricks_host}/api/2.0/fs/files{target_path}"
+        print(f"Uploading to Databricks volume: {target_path}")
+        resp = requests.put(
+            url,
+            headers={
+                **headers,
+                "Content-Type": "application/octet-stream"
+            },
+            data=file_bytes,
+            params={"overwrite": "true"}
+        )
 
     try:
         resp.raise_for_status()

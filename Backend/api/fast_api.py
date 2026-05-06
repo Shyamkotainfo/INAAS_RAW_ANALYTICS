@@ -100,15 +100,21 @@ async def upload_dataset(
 def start_profiling(request: StartProfilingRequest):
     try:
         selected_context = (request.business_context or "none").strip().lower()
-        if selected_context not in {"none", "hr"}:
+        allowed_contexts = {"none", *settings.DOMAIN_WIKI_ROOTS.keys()}
+        if selected_context not in allowed_contexts:
             raise HTTPException(
                 status_code=400,
-                detail="business_context must be either 'none' or 'hr'"
+                detail=(
+                    "business_context must be one of: "
+                    + ", ".join(sorted(allowed_contexts))
+                )
             )
 
         semantic_context = None
-        if selected_context == "hr":
-            semantic_context = settings.DOMAIN_WIKI_ROOTS.get("hr")
+        selected_domain = None
+        if selected_context != "none":
+            selected_domain = selected_context
+            semantic_context = settings.DOMAIN_WIKI_ROOTS.get(selected_domain)
 
         session_orchestrator = QueryOrchestrator()
         profiling = session_orchestrator.attach_file(
@@ -117,6 +123,8 @@ def start_profiling(request: StartProfilingRequest):
             file_format=request.file_format,
             context=request.semantic_context
             context=semantic_context
+            context=semantic_context,
+            domain=selected_domain
         )
         dataset_sessions[request.dataset_id] = session_orchestrator
 

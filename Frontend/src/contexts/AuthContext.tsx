@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (path === "/misc-tools") return true;
 
     if (path === "/misc-tools/data-profiler") return true;
-    if (path == "/misc-tools/data-profiler/task") return true;
+    if (path.startsWith("/misc-tools/data-profiler/task")) return true;
     if (path === "/misc-tools/data-synthesizer") return true;
     if (path == "/misc-tools/data-synthesizer/new") return true;
     if (path === "/insights/new") return true;

@@ -14,6 +14,18 @@ class DatabricksExecutor:
 
     def __init__(self):
         self._backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    def _validate_job_runtime_config(self):
+        if not settings.databricks_cluster_id:
+            raise RuntimeError(
+                "DATABRICKS_CLUSTER_ID is not configured. Add your Databricks compute cluster id "
+                "to Backend/.env before running profiling or queries."
+            )
+
+        if not settings.databricks_ingest_script or not settings.databricks_run_query_script:
+            raise RuntimeError(
+                "Databricks job script paths are not configured. Check "
+                "DATABRICKS_INGEST_SCRIPT and DATABRICKS_RUN_QUERY_SCRIPT."
+            )
 
     # =====================================================
     # INGEST + PROFILE
@@ -23,6 +35,7 @@ class DatabricksExecutor:
             settings.databricks_ingest_script,
             os.path.join(self._backend_root, "databricks_scripts", "databricks", "ingest_and_profile.py")
         )
+        self._validate_job_runtime_config()
 
         job_args = {
             "file_id": file_id,
@@ -85,6 +98,12 @@ class DatabricksExecutor:
         import os
         import uuid
 
+        if not volume_base_path:
+            raise RuntimeError(
+                "Databricks upload path is not configured. Set DATABRICKS_VOLUME_BASE "
+                "or use the default raw_data volume path."
+            )
+
         unique_name = f"{uuid.uuid4().hex}_{os.path.basename(local_path)}"
         target_path = f"{volume_base_path.rstrip('/')}/{unique_name}"
 
@@ -121,6 +140,7 @@ class DatabricksExecutor:
             settings.databricks_run_query_script,
             os.path.join(self._backend_root, "databricks_scripts", "databricks", "run_query.py")
         )
+        self._validate_job_runtime_config()
 
         job_args = {
             "file_path": context["file_path"],
@@ -236,7 +256,15 @@ class DatabricksExecutor:
             headers={"Authorization": f"Bearer {settings.databricks_token}"},
             json=payload
         )
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            response_body = resp.text.strip()
+            if response_body:
+                raise RuntimeError(
+                    f"Databricks job submission failed ({resp.status_code}): {response_body}"
+                ) from exc
+            raise
 
         run_id = resp.json()["run_id"]
 
@@ -291,7 +319,13 @@ class DatabricksExecutor:
         for line in stdout.splitlines():
             if line.startswith("INAAS_SCHEMA_JSON="):
                 json_part = line.replace("INAAS_SCHEMA_JSON=", "").strip()
-                return json.loads(json_part)
+                try:
+                    return json.loads(json_part)
+                except json.JSONDecodeError as exc:
+                    raise RuntimeError(
+                        "Databricks schema output was truncated or malformed. "
+                        "Reduce profiling payload or check job logs."
+                    ) from exc
 
         raise RuntimeError("Schema JSON not found in logs")
 
@@ -302,17 +336,45 @@ class DatabricksExecutor:
         for line in stdout.splitlines():
             if line.startswith("INAAS_PROFILING="):
                 json_part = line.replace("INAAS_PROFILING=", "").strip()
-                return json.loads(json_part)
+                try:
+                    return json.loads(json_part)
+                except json.JSONDecodeError as exc:
+                    raise RuntimeError(
+                        "Databricks profiling output was truncated or malformed. "
+                        "Reduce profiling payload or check job logs."
+                    ) from exc
 
         raise RuntimeError("Profiling JSON not found in logs")
 
     # -----------------------------------------------------
 
     def _extract_query_result(self, stdout: str):
+        chunk_prefix = "INAAS_RESULT_CHUNK:"
+        if "INAAS_RESULT_BEGIN" in stdout and "INAAS_RESULT_END" in stdout:
+            encoded_chunks = []
+            for line in stdout.splitlines():
+                if line.startswith(chunk_prefix):
+                    encoded_chunks.append(line.replace(chunk_prefix, "", 1).strip())
+
+            if not encoded_chunks:
+                raise RuntimeError("Query result chunks were not found in logs")
+
+            try:
+                decoded = base64.b64decode("".join(encoded_chunks)).decode("utf-8")
+                return json.loads(decoded)
+            except Exception as exc:
+                raise RuntimeError(
+                    "Chunked query result was truncated or malformed. Check Databricks job logs."
+                ) from exc
 
         for line in stdout.splitlines():
             if line.startswith("INAAS_RESULT:"):
                 json_part = line.replace("INAAS_RESULT:", "").strip()
-                return json.loads(json_part)
+                try:
+                    return json.loads(json_part)
+                except json.JSONDecodeError as exc:
+                    raise RuntimeError(
+                        "Query result JSON was truncated or malformed. Check Databricks job logs."
+                    ) from exc
 
         raise RuntimeError("Query result not found in logs")
