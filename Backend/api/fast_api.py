@@ -121,9 +121,7 @@ def start_profiling(request: StartProfilingRequest):
             file_id=request.dataset_id,
             file_path=request.file_path,
             file_format=request.file_format,
-            context=request.semantic_context
-            context=semantic_context
-            context=semantic_context,
+            context=request.semantic_context,
             domain=selected_domain
         )
         dataset_sessions[request.dataset_id] = session_orchestrator
