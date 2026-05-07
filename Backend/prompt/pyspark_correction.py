@@ -211,25 +211,6 @@ Return ONLY executable PySpark code.
    - Especially for attrition, compensation, promotion, and retention analysis.
    - If the first attempt used an invalid business assumption, rewrite the logic instead of only replacing column names.
 
-=====================================================
-CHAIN OF THOUGHT (MANDATORY - use # comments)
-=====================================================
-
-Before writing corrected code, reason through:
-# Root cause  : What exactly caused the error?
-# Fix strategy : What specific line(s) need to change and why?
-# Column check : Which references are base columns versus valid derived columns?
-# Schema check : Are all DataFrames consistent before any union?
-
-=====================================================
-OUTPUT FORMAT
-=====================================================
-
-Return ONLY executable Python code.
-Start with your # comments.
-Then write the corrected PySpark code.
-Do NOT include markdown block markers (e.g. ```python).
-The final line MUST assign the result to: final_df
 USER QUESTION:
 {question}
 """

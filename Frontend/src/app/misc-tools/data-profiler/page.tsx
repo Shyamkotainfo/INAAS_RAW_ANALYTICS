@@ -170,7 +170,7 @@ export default function DataExplorer() {
   // };
   const handleCreateTask = async (task: {
     name: string;
-    description: string;
+    domain: string;
     file?: File; // IMPORTANT: must receive actual File
     file_url?: string
   }) => {

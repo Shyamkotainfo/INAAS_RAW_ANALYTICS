@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+// import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, File, X, Link } from "lucide-react";
@@ -11,12 +11,12 @@ import { Progress } from "../ui/progress";
 interface CreateExplorationTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (task: { name: string; description: string; file?: File, }) => void;
+  onSubmit: (task: { name: string; domain: string; file?: File, }) => void;
 }
 
 export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: CreateExplorationTaskDialogProps) {
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [domain, setDomain] = useState("");
   const [file, setFile] = useState<{ name: string; size: number } | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [fileUrl, setFileUrl] = useState("");
@@ -104,14 +104,16 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
 
   const handleSubmit = () => {
     if (!name.trim()) return;
+    if (!domain.trim()) return;
+
     onSubmit({
       name: name.trim(),
-      description: description.trim(),
+      domain: domain.trim(),
       ...file && { file: selectedFile },
       ...fileUrl && { file_url: fileUrl }
     });
     setName("");
-    setDescription("");
+    setDomain("");
     setFile(null);
     setFileUrl("");
     setSourceTab("upload");
@@ -133,8 +135,19 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="task-desc">Description</Label>
-            <Textarea id="task-desc" placeholder="Describe what you want to explore..." value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+            <Label htmlFor="task-desc">Domain</Label>
+            {/* <Textarea id="task-desc" placeholder="Describe what you want to explore..." value={domain} onChange={(e) => setDomain(e.target.value)} rows={3} /> */}
+            <select
+              id="task-desc"
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              className="w-full border rounded-md p-2"
+            >
+              <option value="">Select option</option>
+              <option value="raw_data">None</option>
+
+              <option value="hr">HR</option>
+            </select>
           </div>
 
           <div className="space-y-2">
@@ -208,7 +221,7 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={!name.trim()}>Create Task</Button>
+          <Button onClick={handleSubmit} disabled={!name.trim() || !domain.trim()}>Create Task</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

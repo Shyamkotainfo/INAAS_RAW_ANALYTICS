@@ -56,9 +56,7 @@ def main():
                 remainder = stripped[7:].strip()
                 if not remainder:
                     print("Invalid command.")
-                    print("Use:")
-                    print("  upload local <file_path>")
-                    print("  upload url <volume_path>")
+                    print("Use: upload local <file_path> OR upload url <volume_path>")
                     continue
 
                 mode, separator, path_part = remainder.partition(" ")
@@ -116,6 +114,7 @@ def main():
                 elif mode == "url":
                     volume_path = path_part.strip().strip('"')
                     file_format = detect_format(volume_path)
+                    semantic_context = None
 
                 else:
                     print("Invalid mode. Use 'local' or 'url'")
@@ -144,7 +143,7 @@ def main():
                 continue
 
             if not current_dataset_id:
-                print("Please upload a file first.")
+                print("⚠️  Please upload a file first.")
                 continue
 
             response = orchestrator.run(user_input, current_dataset_id)

@@ -875,6 +875,7 @@ class ApiService {
     dataset_id?: string,
     file_path?: string,
     file_format: string = "",
+    business_context?: string,
   ) {
     try {
       const response = await fetch(
@@ -887,7 +888,8 @@ class ApiService {
           body: JSON.stringify({
             dataset_id: dataset_id,
             file_path: file_path,
-            file_format: file_format
+            file_format: file_format,
+            business_context: business_context
           })
         }
       );
