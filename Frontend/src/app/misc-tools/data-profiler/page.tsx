@@ -187,10 +187,13 @@ export default function DataExplorer() {
       // Navigate to task page using returned dataset_id
       sessionStorage.setItem("profilingUpload", JSON.stringify(result));
 
-      sessionStorage.setItem("profilingDomain", task.domain);
-      navigate.push(
-        `/misc-tools/data-profiler/task`
-      );
+      const searchParams = new URLSearchParams({
+        dataset_id: result.dataset_id,
+        file_path: result.file_path,
+        file_format: result.file_format,
+      });
+
+      navigate.push(`/misc-tools/data-profiler/task?${searchParams.toString()}`);
       setCreateDialogOpen(false)
 
     } catch (error) {
