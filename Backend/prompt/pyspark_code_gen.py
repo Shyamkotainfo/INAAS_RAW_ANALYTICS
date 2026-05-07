@@ -1,16 +1,28 @@
-from prompt.wiki_retriever import retrieve_relevant_chunks
+from prompt.wiki_retriever import (
+    load_domain_semantic_context,
+    retrieve_relevant_chunks,
+)
 
 
-def build_semantic_context(question: str, columns: str, top_k: int = 1) -> str:
+def build_semantic_context(
+    domain: str | None,
+    question: str,
+    columns: str,
+    top_k: int = 1,
+) -> str:
     """
-    Optional supporting context only.
-    This is allowed to provide glossary and narrative support, but it is not the
-    primary semantic source for business-rule enforcement.
+    Return optional supporting context for prompt construction.
+
+    For non-HR domains we prefer the domain semantic layer directly.
+    For HR we keep the existing targeted retrieval behavior.
     """
+    if domain and domain != "hr":
+        return load_domain_semantic_context(domain)
+
     return retrieve_relevant_chunks(
         question=question,
         schema_columns=columns,
-        top_k=top_k
+        top_k=top_k,
     )
 
 
@@ -23,20 +35,20 @@ def _format_mappings(resolved_mappings: dict[str, str]) -> str:
     if not resolved_mappings:
         return "- None"
 
-    lines = []
-    for logical_name, physical_name in resolved_mappings.items():
-        lines.append(f"- {logical_name} -> {physical_name}")
-    return "\n".join(lines)
+    return "\n".join(
+        f"- {logical_name} -> {physical_name}"
+        for logical_name, physical_name in resolved_mappings.items()
+    )
 
 
 def _format_rule(business_rule: dict | None) -> str:
     if not business_rule:
         return "None. Use schema-only reasoning and do not invent business logic."
 
-    lines = []
-    rule_name = business_rule.get("name", "unknown_rule")
-    lines.append(f"Rule name: {rule_name}")
-    lines.append(f"Definition: {business_rule.get('definition', 'N/A')}")
+    lines = [
+        f"Rule name: {business_rule.get('name', 'unknown_rule')}",
+        f"Definition: {business_rule.get('definition', 'N/A')}",
+    ]
 
     required_fields = business_rule.get("required_fields", [])
     if required_fields:
@@ -107,6 +119,17 @@ HARD GUARDRAILS:
 OPTIONAL SUPPORTING CONTEXT:
 {_format_supporting_context(semantic_context)}
 
+USER QUESTION:
+{question}
+
+AVAILABLE HELPERS:
+- as_text("column_name"): trimmed string value
+- as_double("column_name"): numeric cast that handles values like "93,97"
+- as_int("column_name"): integer cast built from as_double
+- as_date("column_name"): date cast for yyyy-mm-dd and timestamp-like strings
+- as_bool_flag("column_name"): boolean cast for TRUE/FALSE/1/0 text flags
+- as_priority_rank("column_name"): maps High/Medium/Low text priority to 3/2/1
+
 HARD RULES:
 - NEVER invent column names.
 - ONLY use exact columns from AVAILABLE COLUMNS.
@@ -116,40 +139,16 @@ HARD RULES:
 - If required fields are missing, return a one-row DataFrame with status = "CANNOT_COMPUTE" and a reason column.
 - NEVER use SQL.
 - ONLY use DataFrame API.
+- When comparing, sorting, or aggregating string-encoded numeric/date/flag columns, use the helper functions first.
+- NEVER redefine helper functions such as as_date, as_double, as_int, as_bool_flag, or as_priority_rank.
+- If a priority column contains labels like High, Medium, Low, rank it with as_priority_rank instead of casting it to int.
 - ALWAYS assign the final result to final_df.
-
-VALUE MATCHING RULES (CRITICAL):
-
-- NEVER rely on exact string matches for categorical values.
-- ALWAYS use case-insensitive matching using lower().
-
-- For voluntary exits:
-  match values containing:
-    "resign", "voluntary"
-
-- For involuntary exits:
-  match values containing:
-    "involuntary", "terminate"
-
-- For retirement:
-  match values containing:
-    "retire"
-
-- Example:
-  Instead of:
-    df["TerminationType"].isin(["Resigned"])
-  Use:
-    F.lower(F.col("TerminationType")).contains("resign")
-
-- Combine conditions using OR where appropriate.
+- Treat OPTIONAL SUPPORTING CONTEXT as guidance, not as extra schema.
 
 Before code, write only short # comments:
-# 1. columns used
-# 2. cleaning needed
-# 3. transformation strategy
+# 1. mode/type
+# 2. columns used
+# 3. plan
 
 Return ONLY executable PySpark code.
-
-USER QUESTION:
-{question}
 """

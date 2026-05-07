@@ -2,6 +2,7 @@ from core.query_orchestrator import QueryOrchestrator
 from analytics.dataset_overview_generator import DatasetOverviewGenerator
 from config.settings import settings
 import json
+import shlex
 import uuid
 
 
@@ -32,7 +33,7 @@ def main():
     orchestrator = QueryOrchestrator()
     overview_generator = DatasetOverviewGenerator()
 
-    VOLUME_BASE = settings.databricks_volume_base
+    volume_base = settings.databricks_volume_base
     current_dataset_id = None
 
     while True:
@@ -46,63 +47,72 @@ def main():
                 print("Goodbye!")
                 break
 
-            # ==================================================
-            # UPLOAD COMMAND
-            # ==================================================
             if user_input.startswith("upload "):
-                parts = user_input.split(" ", 2)
+                stripped = user_input.strip()
+                if not stripped.lower().startswith("upload "):
+                    print("Invalid command.")
+                    continue
 
-                if len(parts) < 3:
+                remainder = stripped[7:].strip()
+                if not remainder:
                     print("Invalid command.")
                     print("Use: upload local <file_path> OR upload url <volume_path>")
                     continue
 
-                mode = parts[1].lower()
-                path = parts[2].strip()
+                mode, separator, path_part = remainder.partition(" ")
+                mode = mode.lower()
+                path_part = path_part.strip()
 
-                file_id = f"cli_{uuid.uuid4().hex[:6]}"
+                if not separator or not path_part:
+                    print("Invalid command.")
+                    print("Use:")
+                    print("  upload local <file_path>")
+                    print("  upload url <volume_path>")
+                    continue
 
-                # -----------------------------
-                # LOCAL FILE UPLOAD
-                # -----------------------------
+                selected_domain = None
+                semantic_context = None
+
                 if mode == "local":
+                    path = path_part.strip().strip('"')
+
+                    try:
+                        with open(path, "rb"):
+                            pass
+                    except Exception as e:
+                        print(f"Failed to read local file: {e}")
+                        continue
+
                     file_format = detect_format(path)
 
                     print("\nUploading file to Databricks Volume...")
-
                     volume_path = orchestrator.executor.upload_to_volume(
                         local_path=path,
-                        volume_base_path=VOLUME_BASE
+                        volume_base_path=volume_base
                     )
-
                     print(f"Uploaded to: {volume_path}")
 
-                    # 🔥 SAME AS FASTAPI LOGIC
                     print("\nSelect Business Context:")
                     print("1. HR")
-                    print("2. None")
+                    print("2. Manufacturing")
+                    print("3. None")
 
                     choice = input("Enter choice: ").strip()
-
                     domain_map = {
                         "1": "hr",
-                        "2": None
+                        "2": "manufacturing",
+                        "3": None,
                     }
-
                     selected_domain = domain_map.get(choice)
 
                     if choice not in domain_map:
                         print("Invalid choice. Defaulting to no context.")
 
-                    semantic_context = None
                     if selected_domain:
                         semantic_context = settings.DOMAIN_WIKI_ROOTS.get(selected_domain)
 
-                # -----------------------------
-                # VOLUME PATH (already uploaded)
-                # -----------------------------
                 elif mode == "url":
-                    volume_path = path
+                    volume_path = path_part.strip().strip('"')
                     file_format = detect_format(volume_path)
                     semantic_context = None
 
@@ -110,20 +120,19 @@ def main():
                     print("Invalid mode. Use 'local' or 'url'")
                     continue
 
-                # -----------------------------
-                # PROFILING
-                # -----------------------------
+                file_id = f"cli_{uuid.uuid4().hex[:6]}"
+
                 profiling = orchestrator.attach_file(
                     file_id=file_id,
                     file_path=volume_path,
                     file_format=file_format,
-                    context=semantic_context
+                    context=semantic_context,
+                    domain=selected_domain if mode == "local" else None
                 )
 
                 overview = overview_generator.generate(profiling)
 
-                print("\n✅ File uploaded and profiled successfully.\n")
-
+                print("\nFile uploaded and profiled successfully.\n")
                 print(json.dumps({
                     "dataset_id": file_id,
                     "overview": overview,
@@ -133,9 +142,6 @@ def main():
                 current_dataset_id = file_id
                 continue
 
-            # ==================================================
-            # QUERY
-            # ==================================================
             if not current_dataset_id:
                 print("⚠️  Please upload a file first.")
                 continue
@@ -145,16 +151,16 @@ def main():
             print("\n========== RESPONSE ==========\n")
 
             if response.get("irrelevant"):
-                print("⚠️ " + response.get("message", "Question not related to dataset"))
+                print("Warning: " + response.get("message", "Question not related to the dataset."))
                 continue
 
             if response.get("error") and not response.get("results"):
-                print("❌ Query failed after all retries.")
+                print("Query failed after all retries.")
 
             print(json.dumps(response, indent=2))
 
         except Exception as e:
-            print("\n❌ ERROR:", str(e))
+            print("\nERROR:", str(e))
 
 
 if __name__ == "__main__":

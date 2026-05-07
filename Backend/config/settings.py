@@ -11,12 +11,13 @@ import os
 from typing import ClassVar, Optional
 from functools import lru_cache
 from pydantic_settings import BaseSettings
-from pydantic import Field, validator
+from pydantic import AliasChoices, Field, validator
 
 
 class Settings(BaseSettings):
     DOMAIN_WIKI_ROOTS: ClassVar[dict[str, str]] = {
-        "hr": "/Volumes/inaas_dev/raw_analytics/hr"
+        "hr": "/Volumes/inaas_dev/raw_analytics/hr",
+        "manufacturing": "/Volumes/inaas_dev/raw_analytics/supply-chain"
     }
 
     # =========================
@@ -42,7 +43,10 @@ class Settings(BaseSettings):
     # =========================
     # S3
     # =========================
-    s3_raw_bucket: str = Field(..., env="S3_RAW_BUCKET")
+    s3_raw_bucket: str = Field(
+        ...,
+        validation_alias=AliasChoices("S3_RAW_BUCKET", "SCHEMA_S3_BUCKET", "S3_BUCKET")
+    )
     s3_bucket: str = Field(..., env="S3_BUCKET")
 
     # =========================
@@ -59,16 +63,19 @@ class Settings(BaseSettings):
     databricks_token: Optional[str] = Field(None, env="DATABRICKS_TOKEN")
     databricks_cluster_id: Optional[str] = Field(None, env="DATABRICKS_CLUSTER_ID")
     databricks_default_file_path: Optional[str] = Field(None, env="DATABRICKS_DEFAULT_FILE_PATH")
-    databricks_volume_base: Optional[str] = Field(None, env="DATABRICKS_VOLUME_BASE")
+    databricks_volume_base: Optional[str] = Field(
+        "/Volumes/inaas_dev/raw_analytics/raw_data",
+        env="DATABRICKS_VOLUME_BASE"
+    )
     
     databricks_run_query_script: str = Field(
-        "dbfs:/inaas/jobs/run_query.py",
+        "/Volumes/inaas_dev/raw_analytics/raw_data/jobs/run_query.py",
         env="DATABRICKS_RUN_QUERY_SCRIPT"
     )
 
 
     databricks_ingest_script: str = Field(
-        "dbfs:/inaas/jobs/ingest_and_profile.py",
+        "/Volumes/inaas_dev/raw_analytics/raw_data/jobs/ingest_and_profile.py",
         env="DATABRICKS_INGEST_SCRIPT"
     )
 
@@ -88,6 +95,16 @@ class Settings(BaseSettings):
         allowed = {"databricks", "emr"}
         if v not in allowed:
             raise ValueError(f"EXECUTION_MODE must be one of {allowed}")
+        return v
+
+    @validator("debug", pre=True)
+    def validate_debug(cls, v):
+        if isinstance(v, str):
+            normalized = v.strip().lower()
+            if normalized in {"1", "true", "yes", "on", "debug"}:
+                return True
+            if normalized in {"0", "false", "no", "off", "release", "prod", "production"}:
+                return False
         return v
 
     def configure_aws_credentials(self):

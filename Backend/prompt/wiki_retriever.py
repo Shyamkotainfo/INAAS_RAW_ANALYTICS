@@ -1,3 +1,4 @@
+import json
 import posixpath
 
 from config.settings import settings
@@ -179,6 +180,66 @@ def load_domain_context_text(domain: str, filename: str) -> str:
     raise RuntimeError(
         f"Domain context file not found in Databricks Volume for domain={domain}, filename={filename}"
     )
+
+
+def try_load_domain_context_text(domain: str, filename: str) -> str | None:
+    try:
+        return load_domain_context_text(domain, filename)
+    except Exception as exc:
+        logger.info(
+            "Optional domain context file unavailable | domain=%s | file=%s | error=%s",
+            domain,
+            filename,
+            str(exc)
+        )
+        return None
+
+
+def load_domain_semantic_context(domain: str) -> str:
+    """
+    Load a domain-level semantic context artifact when structured rule files
+    are not available yet.
+    """
+    candidate_filenames = [
+        f"{domain}_semantic_context.json",
+        f"{domain}_semantic_context.md",
+        "semantic_context.json",
+        "semantic_context.md",
+    ]
+
+    for filename in candidate_filenames:
+        raw = try_load_domain_context_text(domain, filename)
+        if not raw:
+            continue
+
+        if filename.endswith(".json"):
+            try:
+                parsed = json.loads(raw)
+                formatted = json.dumps(parsed, indent=2, ensure_ascii=True)
+                logger.info(
+                    "Loaded JSON semantic context | domain=%s | file=%s | chars=%d",
+                    domain,
+                    filename,
+                    len(formatted)
+                )
+                return formatted
+            except Exception as exc:
+                logger.warning(
+                    "Semantic context JSON parse failed, using raw text | domain=%s | file=%s | error=%s",
+                    domain,
+                    filename,
+                    str(exc)
+                )
+
+        logger.info(
+            "Loaded text semantic context | domain=%s | file=%s | chars=%d",
+            domain,
+            filename,
+            len(raw)
+        )
+        return raw
+
+    return ""
 
 
 def retrieve_relevant_chunks(question: str, schema_columns: str, top_k: int = 1) -> str:

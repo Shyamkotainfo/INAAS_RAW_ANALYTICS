@@ -1,0 +1,993 @@
+{
+  "title": "HR Domain — Semantic Layer for LLM-Driven Analytics",
+  "purpose": "This document is a domain-level semantic layer for the Human Resources (HR) function. It is uploaded alongside HR datasets so that an LLM can generate accurate PySpark queries, produce meaningful analytical insights, and recommend relevant charts without inventing meanings, making unsafe assumptions, or producing misleading conclusions.",
+  "dataset_agnostic": true,
+  "domain": "Human Resources (HR) Analytics",
+  "domain_summary": {
+    "description": "HR analytics focuses on understanding workforce composition, performance, compensation, attrition, hiring, attendance, and development with the goal of supporting data-driven decisions that affect people, costs, and organizational effectiveness.",
+    "analysis_levels": [
+      {
+        "level": "Descriptive",
+        "question_type": "What happened?",
+        "example": "What is the attrition rate by department this year?"
+      },
+      {
+        "level": "Diagnostic",
+        "question_type": "Why did it happen?",
+        "example": "Which departments have high attrition and low promotion rates?"
+      },
+      {
+        "level": "Prescriptive",
+        "question_type": "What should we do?",
+        "example": "Which roles are at succession risk and need immediate pipeline development?"
+      }
+    ],
+    "llm_rule": "The LLM should always attempt to answer at the highest level the data supports, without overreaching beyond what is available."
+  },
+  "core_entities": [
+    {
+      "entity": "Employee",
+      "description": "An individual on the organization's payroll or workforce",
+      "typical_identifier": "employee_id"
+    },
+    {
+      "entity": "Department",
+      "description": "An organizational unit grouping employees by function",
+      "typical_identifier": "department, department_id"
+    },
+    {
+      "entity": "Manager",
+      "description": "An employee who directly supervises other employees",
+      "typical_identifier": "manager_id, manager_name"
+    },
+    {
+      "entity": "Job Role / Designation",
+      "description": "The title or role classification of an employee",
+      "typical_identifier": "designation, job_role, job_title"
+    },
+    {
+      "entity": "Business Unit",
+      "description": "A larger organizational division containing multiple departments",
+      "typical_identifier": "business_unit"
+    },
+    {
+      "entity": "Location",
+      "description": "Geographic office or region where the employee is based",
+      "typical_identifier": "location, office_location"
+    },
+    {
+      "entity": "Hiring Source",
+      "description": "The channel through which an employee was recruited",
+      "typical_identifier": "hiring_source, source_of_hire"
+    },
+    {
+      "entity": "Cost Center",
+      "description": "The financial unit an employee's salary is charged to",
+      "typical_identifier": "cost_center"
+    }
+  ],
+  "entity_rules": [
+    "employee_id is a unique identifier",
+    "employee_id must never be aggregated as SUM or AVG",
+    "employee_id may be used for row-level filtering, joins, or headcount counting via COUNT(*)"
+  ],
+  "measurable_fields": [
+    {
+      "field": "Salary",
+      "typical_column_names": [
+        "salary",
+        "basic_salary",
+        "ctc"
+      ],
+      "default_aggregation": [
+        "AVG",
+        "SUM"
+      ],
+      "unit": "Currency",
+      "notes": "Use AVG for comparisons; SUM for total payroll cost"
+    },
+    {
+      "field": "Bonus",
+      "typical_column_names": [
+        "bonus",
+        "bonus_amount"
+      ],
+      "default_aggregation": [
+        "AVG",
+        "SUM"
+      ],
+      "unit": "Currency",
+      "notes": "Often a percentage of salary; context-dependent"
+    },
+    {
+      "field": "Incentives",
+      "typical_column_names": [
+        "incentive",
+        "variable_pay"
+      ],
+      "default_aggregation": [
+        "AVG",
+        "SUM"
+      ],
+      "unit": "Currency",
+      "notes": "Common in sales roles; may distort averages if not segmented"
+    },
+    {
+      "field": "Experience",
+      "typical_column_names": [
+        "total_experience",
+        "years_of_experience"
+      ],
+      "default_aggregation": [
+        "AVG"
+      ],
+      "unit": "Years",
+      "notes": "Often pre-hire experience; distinguish from tenure"
+    },
+    {
+      "field": "Tenure",
+      "typical_column_names": [
+        "tenure",
+        "years_at_company",
+        "months_at_company"
+      ],
+      "default_aggregation": [
+        "AVG"
+      ],
+      "unit": "Years or Months",
+      "notes": "Time since joining the current organization"
+    },
+    {
+      "field": "Attendance",
+      "typical_column_names": [
+        "attendance_percentage",
+        "attendance_rate"
+      ],
+      "default_aggregation": [
+        "AVG"
+      ],
+      "unit": "Percentage (%)",
+      "notes": "Never SUM; averaging across employees is correct"
+    },
+    {
+      "field": "Overtime Hours",
+      "typical_column_names": [
+        "overtime_hours",
+        "ot_hours"
+      ],
+      "default_aggregation": [
+        "AVG",
+        "SUM"
+      ],
+      "unit": "Hours",
+      "notes": "SUM for total load; AVG per employee for workload analysis"
+    },
+    {
+      "field": "Performance Score",
+      "typical_column_names": [
+        "performance_score",
+        "performance_rating"
+      ],
+      "default_aggregation": [
+        "AVG"
+      ],
+      "unit": "Score or Rating",
+      "notes": "Distribution analysis is often more useful than average alone"
+    },
+    {
+      "field": "Training Hours",
+      "typical_column_names": [
+        "training_hours",
+        "training_completed"
+      ],
+      "default_aggregation": [
+        "AVG",
+        "SUM"
+      ],
+      "unit": "Hours",
+      "notes": "SUM for total investment; AVG for per-employee effort"
+    },
+    {
+      "field": "Attrition Count",
+      "typical_column_names": [
+        "attrition",
+        "exited",
+        "is_attrition"
+      ],
+      "default_aggregation": [
+        "COUNT",
+        "SUM"
+      ],
+      "unit": "Count",
+      "notes": "Binary flag or categorical; never AVG"
+    },
+    {
+      "field": "Headcount",
+      "typical_column_names": [
+        "derived_from_count"
+      ],
+      "default_aggregation": [
+        "COUNT"
+      ],
+      "unit": "Count",
+      "notes": "Total active employees in a segment"
+    },
+    {
+      "field": "Promotion Count",
+      "typical_column_names": [
+        "promoted",
+        "is_promoted"
+      ],
+      "default_aggregation": [
+        "COUNT",
+        "SUM"
+      ],
+      "unit": "Count",
+      "notes": "Binary flag indicating if promoted in the review period"
+    },
+    {
+      "field": "Salary Hike %",
+      "typical_column_names": [
+        "salary_hike",
+        "hike_percentage"
+      ],
+      "default_aggregation": [
+        "AVG"
+      ],
+      "unit": "Percentage (%)",
+      "notes": "Analyze by department and designation for fairness"
+    }
+  ],
+  "dimensions": [
+    {
+      "dimension": "Department",
+      "typical_column_names": [
+        "department",
+        "dept_name"
+      ],
+      "description": "Primary segmentation for most HR metrics"
+    },
+    {
+      "dimension": "Designation / Job Level",
+      "typical_column_names": [
+        "designation",
+        "job_level",
+        "grade"
+      ],
+      "description": "Used to compare within a career level"
+    },
+    {
+      "dimension": "Gender",
+      "typical_column_names": [
+        "gender"
+      ],
+      "description": "Diversity and pay equity analysis"
+    },
+    {
+      "dimension": "Location",
+      "typical_column_names": [
+        "location",
+        "city",
+        "region"
+      ],
+      "description": "Geographic workforce distribution"
+    },
+    {
+      "dimension": "Employment Type",
+      "typical_column_names": [
+        "employment_type"
+      ],
+      "description": "Full-time, part-time, contract, etc."
+    },
+    {
+      "dimension": "Joining Year / Cohort",
+      "typical_column_names": [
+        "joining_year",
+        "joining_date"
+      ],
+      "description": "Hiring trend and cohort analysis"
+    },
+    {
+      "dimension": "Manager",
+      "typical_column_names": [
+        "manager_name",
+        "manager_id"
+      ],
+      "description": "Manager-level performance benchmarking"
+    },
+    {
+      "dimension": "Business Unit",
+      "typical_column_names": [
+        "business_unit",
+        "division"
+      ],
+      "description": "Cross-unit comparison"
+    },
+    {
+      "dimension": "Hiring Source",
+      "typical_column_names": [
+        "source_of_hire"
+      ],
+      "description": "Evaluating recruitment channel effectiveness"
+    },
+    {
+      "dimension": "Age Band",
+      "typical_column_names": [
+        "age_group",
+        "age_band"
+      ],
+      "description": "Generational workforce segmentation"
+    },
+    {
+      "dimension": "Performance Band",
+      "typical_column_names": [
+        "performance_band"
+      ],
+      "description": "High / Mid / Low performer segmentation"
+    },
+    {
+      "dimension": "Attrition Status",
+      "typical_column_names": [
+        "attrition",
+        "is_active",
+        "employment_status"
+      ],
+      "description": "Active vs. exited employees"
+    },
+    {
+      "dimension": "Tenure Band",
+      "typical_column_names": [
+        "derived_band"
+      ],
+      "description": "Career stage segmentation such as <1 yr, 1–3 yrs, 3–5 yrs, 5+ yrs"
+    }
+  ],
+  "business_definitions": {
+    "attrition_types": [
+      {
+        "term": "Total Attrition",
+        "definition": "All employees who left the organization in a period, regardless of reason"
+      },
+      {
+        "term": "Voluntary Attrition",
+        "definition": "Employees who resigned of their own accord"
+      },
+      {
+        "term": "Involuntary Attrition",
+        "definition": "Employees terminated, laid off, or asked to leave by the organization"
+      },
+      {
+        "term": "Regrettable Attrition",
+        "definition": "Voluntary exits of employees the organization wanted to retain, typically high performers or critical roles"
+      },
+      {
+        "term": "Non-Regrettable Attrition",
+        "definition": "Exits of low performers or poor cultural fits, considered acceptable or healthy"
+      }
+    ],
+    "talent_classification": [
+      {
+        "term": "High Performer",
+        "definition": "An employee whose performance score falls in the top tier, such as top 20% or rating 4–5 on a 5-point scale"
+      },
+      {
+        "term": "Critical Talent",
+        "definition": "Employees in roles that are hard to replace due to rare skills, domain expertise, or strategic importance"
+      },
+      {
+        "term": "Bench Strength",
+        "definition": "The number of ready-now or near-ready successors available for key roles"
+      },
+      {
+        "term": "Succession Risk",
+        "definition": "A role or position where no qualified internal successor exists if the current holder exits"
+      },
+      {
+        "term": "Leadership Pipeline",
+        "definition": "The pool of employees being groomed for future leadership or management responsibilities"
+      }
+    ],
+    "compensation_terms": [
+      {
+        "term": "Salary Compression",
+        "definition": "When pay differences between levels are smaller than expected, often due to market salary inflation for new hires outpacing internal raises"
+      },
+      {
+        "term": "Compensation Band",
+        "definition": "The defined salary range (minimum, midpoint, maximum) for a given designation or job level"
+      },
+      {
+        "term": "Pay Equity",
+        "definition": "Equal pay for equivalent roles, experience, and performance across gender, location, or other dimensions"
+      },
+      {
+        "term": "Variable Pay",
+        "definition": "Non-fixed compensation such as bonuses, incentives, and commissions"
+      }
+    ],
+    "workforce_metrics_terms": [
+      {
+        "term": "Internal Mobility",
+        "definition": "Movement of employees within the organization including lateral moves, promotions, or role changes"
+      },
+      {
+        "term": "Employee Engagement",
+        "definition": "A measure of how emotionally invested an employee is in their work and organization, typically collected via surveys"
+      },
+      {
+        "term": "Workforce Productivity",
+        "definition": "Output or value generated per employee, often approximated using revenue per headcount when revenue data is available"
+      },
+      {
+        "term": "Span of Control",
+        "definition": "The number of direct reports a manager is responsible for"
+      },
+      {
+        "term": "Time to Fill",
+        "definition": "The number of days between a job opening and an offer acceptance"
+      },
+      {
+        "term": "Offer Acceptance Rate",
+        "definition": "Percentage of offers extended that are accepted by candidates"
+      }
+    ],
+    "critical_rules": [
+      "Do not assume all attrition is negative",
+      "Non-regrettable attrition may be a sign of healthy performance management"
+    ]
+  },
+  "policies_and_thresholds": {
+    "promotion_eligibility": [
+      "Employees are typically eligible for promotion after a minimum tenure in their current designation, commonly 12–24 months",
+      "High performers are usually prioritized for promotion in review cycles",
+      "Promotion without performance improvement may indicate process gaps"
+    ],
+    "performance_ratings": [
+      "Performance scores typically follow a scale such as 1–5 or bands",
+      "If a 5-point scale is used: 1–2 = Low, 3 = Average, 4–5 = High",
+      "Forced distribution policies may cap the percentage of top-rated employees per department"
+    ],
+    "compensation_bands": [
+      "Employees paid above the maximum of their band may be flagged for salary review",
+      "Employees at the minimum of their band for 2+ years may be at retention risk",
+      "New hires frequently enter at or above mid-band due to market conditions, contributing to compression"
+    ],
+    "bonus_and_incentive_eligibility": [
+      "Employees who have not completed their probation period are typically ineligible for bonuses",
+      "Employees on a performance improvement plan may be ineligible for variable pay",
+      "Prorated bonuses may apply for employees who joined mid-cycle"
+    ],
+    "attendance_thresholds": [
+      "Attendance below 80% or a defined threshold may trigger HR action",
+      "Leave-adjusted attendance should be compared separately from raw attendance"
+    ],
+    "span_of_control": [
+      "Typical healthy span is 5–10 direct reports per manager",
+      "More than 15 direct reports may indicate management overload",
+      "Fewer than 3 direct reports may indicate over-management or under-utilization of leadership capacity"
+    ],
+    "training_requirements": [
+      "Mandatory training completion is often tracked with a 100% target",
+      "Low training hours may indicate lack of development investment or disengagement"
+    ]
+  },
+  "kpis": [
+    {
+      "kpi": "Attrition Rate",
+      "formula": "(Employees Exited in Period / Average Headcount in Period) × 100",
+      "notes": "Annualize if computing for a sub-year period"
+    },
+    {
+      "kpi": "Regrettable Attrition Rate",
+      "formula": "(Regrettable Exits / Total Exits) × 100",
+      "notes": "Requires performance or criticality data to compute"
+    },
+    {
+      "kpi": "Headcount",
+      "formula": "COUNT(employee_id) WHERE is_active = 1",
+      "notes": "Always filter for active employees unless analyzing exits"
+    },
+    {
+      "kpi": "Average Salary",
+      "formula": "AVG(salary) grouped by relevant dimension",
+      "notes": "Use median for skewed distributions"
+    },
+    {
+      "kpi": "Total Payroll Cost",
+      "formula": "SUM(salary + bonus + incentives)",
+      "notes": "Useful for cost center or department budgeting"
+    },
+    {
+      "kpi": "Average Tenure",
+      "formula": "AVG(tenure_in_months / 12)",
+      "notes": "Segment by department, designation, or gender"
+    },
+    {
+      "kpi": "Promotion Rate",
+      "formula": "(Employees Promoted / Eligible Employees) × 100",
+      "notes": "Eligibility criteria must be applied before computing"
+    },
+    {
+      "kpi": "Internal Mobility Rate",
+      "formula": "(Internal Transfers or Role Changes / Total Employees) × 100",
+      "notes": "A higher rate is usually a positive indicator"
+    },
+    {
+      "kpi": "Attendance Rate",
+      "formula": "AVG(attendance_percentage)",
+      "notes": "Never SUM; averages across individuals"
+    },
+    {
+      "kpi": "Gender Diversity Ratio",
+      "formula": "COUNT(gender = 'Female') / COUNT(*) × 100",
+      "notes": "Compute at department, level, and leadership layers"
+    },
+    {
+      "kpi": "Training Hours per Employee",
+      "formula": "SUM(training_hours) / COUNT(employee_id)",
+      "notes": "Filter by department or role for targeted insights"
+    },
+    {
+      "kpi": "Offer Acceptance Rate",
+      "formula": "(Offers Accepted / Offers Extended) × 100",
+      "notes": "Requires recruitment pipeline data"
+    },
+    {
+      "kpi": "Revenue per Employee",
+      "formula": "Total Revenue / Active Headcount",
+      "notes": "Requires revenue data; proxy for workforce productivity"
+    }
+  ],
+  "aggregation_rules": [
+    {
+      "field_type": "employee_id",
+      "correct_treatment": "Use in COUNT(*), GROUP BY for uniqueness, or joins only",
+      "never_do_this": "SUM, AVG, or use as a measure"
+    },
+    {
+      "field_type": "salary",
+      "correct_treatment": "AVG for benchmarking; SUM for payroll totals",
+      "never_do_this": "SUM when comparing groups of different sizes"
+    },
+    {
+      "field_type": "attendance_percentage",
+      "correct_treatment": "AVG across employees",
+      "never_do_this": "SUM"
+    },
+    {
+      "field_type": "performance_score",
+      "correct_treatment": "AVG for group comparison; distribution for spread",
+      "never_do_this": "Binary filter without acknowledging distribution"
+    },
+    {
+      "field_type": "attrition (binary flag)",
+      "correct_treatment": "SUM to count exits; AVG to compute attrition rate when logically framed",
+      "never_do_this": "Treat as a continuous measure"
+    },
+    {
+      "field_type": "tenure",
+      "correct_treatment": "AVG for group comparison; segment into bands for distribution",
+      "never_do_this": "Treat raw months as a category"
+    },
+    {
+      "field_type": "percentages in general",
+      "correct_treatment": "Do not SUM unless they are counts disguised as percentages",
+      "never_do_this": "Add percentages together"
+    },
+    {
+      "field_type": "missing values",
+      "correct_treatment": "Treat as unknown; flag in output",
+      "never_do_this": "Treat as zero unless explicitly justified"
+    }
+  ],
+  "interpretation_rules": {
+    "attrition": [
+      "High attrition does not always mean poor culture",
+      "Stable headcount does not mean zero attrition",
+      "Attrition requires a time window"
+    ],
+    "compensation": [
+      "High salary does not mean overpayment",
+      "Low salary does not mean underpayment",
+      "Salary comparison without designation control is misleading"
+    ],
+    "attendance": [
+      "Low attendance does not imply absenteeism",
+      "100% attendance may not indicate ideal productivity"
+    ],
+    "performance": [
+      "Low performance scores for recently promoted or transferred employees may be role-transition-related",
+      "High performance scores with high attrition in a group may indicate unmet career expectations"
+    ],
+    "tenure": [
+      "Long tenure with no promotion is not inherently negative",
+      "Short average tenure is concerning only if accompanied by regrettable exits"
+    ]
+  },
+  "cause_and_effect_relationships": [
+    {
+      "cause": "Delayed promotions",
+      "likely_effect": "Increased voluntary attrition, especially among high performers",
+      "insight_type": "Retention Risk"
+    },
+    {
+      "cause": "Low manager quality",
+      "likely_effect": "Higher voluntary exits in affected teams",
+      "insight_type": "Manager Effectiveness"
+    },
+    {
+      "cause": "Poor internal mobility",
+      "likely_effect": "Mid-tenure attrition (3–5 year band)",
+      "insight_type": "Career Development"
+    },
+    {
+      "cause": "High overtime over sustained periods",
+      "likely_effect": "Declining engagement and eventual burnout exits",
+      "insight_type": "Workload and Wellbeing"
+    },
+    {
+      "cause": "Salary compression",
+      "likely_effect": "Retention risk for senior employees who see new hires at similar pay",
+      "insight_type": "Compensation Fairness"
+    },
+    {
+      "cause": "Low training investment",
+      "likely_effect": "Stagnant performance and reduced employee development satisfaction",
+      "insight_type": "Capability Building"
+    },
+    {
+      "cause": "Weak succession planning",
+      "likely_effect": "Leadership continuity risk when key roles are vacated",
+      "insight_type": "Succession and Risk"
+    },
+    {
+      "cause": "High hiring volume without productivity improvement",
+      "likely_effect": "Overstaffing or onboarding/integration inefficiency",
+      "insight_type": "Workforce Productivity"
+    },
+    {
+      "cause": "Promotion without salary adjustment",
+      "likely_effect": "Short-term engagement spike followed by attrition",
+      "insight_type": "Compensation Alignment"
+    },
+    {
+      "cause": "Low engagement scores sustained over time",
+      "likely_effect": "Leading indicator of voluntary attrition in 6–12 months",
+      "insight_type": "Predictive Risk"
+    }
+  ],
+  "executive_priorities": {
+    "tier_1_highest_priority": [
+      "Regrettable attrition, especially among high performers and critical talent",
+      "Succession risk for leadership and critical roles",
+      "Pay equity gaps across gender, location, and designation"
+    ],
+    "tier_2_high_priority": [
+      "Manager effectiveness",
+      "Internal mobility and career development patterns",
+      "Compensation competitiveness relative to bands"
+    ],
+    "tier_3_operational_priority": [
+      "Overall headcount trends and hiring velocity",
+      "Attendance and overtime patterns",
+      "Training completion and effectiveness"
+    ],
+    "tier_4_supplementary": [
+      "Gender diversity ratios by department and level",
+      "Hiring source effectiveness",
+      "Offer acceptance rates"
+    ],
+    "leadership_rule": "When asked for top insights or leadership focus, lead with Tier 1 items if the data supports them."
+  },
+  "preferred_comparison_patterns": [
+    {
+      "comparison": "Department vs. Department",
+      "why_meaningful": "Identifies organizational units with performance, attrition, or cost outliers"
+    },
+    {
+      "comparison": "Designation vs. Designation",
+      "why_meaningful": "Controls for seniority and role type in compensation and performance analysis"
+    },
+    {
+      "comparison": "Manager vs. Manager (within department)",
+      "why_meaningful": "Isolates management quality from structural factors"
+    },
+    {
+      "comparison": "High Performers vs. Average Performers",
+      "why_meaningful": "Reveals differential treatment in pay, promotion, and development"
+    },
+    {
+      "comparison": "New Hires (< 1 yr tenure) vs. Long-Tenure Employees",
+      "why_meaningful": "Highlights onboarding effectiveness and salary compression"
+    },
+    {
+      "comparison": "Active vs. Exited Employees",
+      "why_meaningful": "Enables attrition profiling and exit analysis"
+    },
+    {
+      "comparison": "Business Unit vs. Business Unit",
+      "why_meaningful": "Strategic workforce alignment across divisions"
+    },
+    {
+      "comparison": "Location vs. Location",
+      "why_meaningful": "Identifies geographic compensation disparities and attendance norms"
+    },
+    {
+      "comparison": "Gender by Department and Level",
+      "why_meaningful": "Diversity equity analysis"
+    },
+    {
+      "comparison": "Cohort Year (Joining Year)",
+      "why_meaningful": "Tracks how groups hired at different times perform and retain over time"
+    }
+  ],
+  "comparison_avoidance_rules": [
+    "Avoid comparing employees of different designations on raw salary without normalization",
+    "Avoid grouping by unique identifiers like employee_id when aggregating"
+  ],
+  "time_based_analysis_rules": [
+    {
+      "metric": "Attrition",
+      "recommended_time_granularity": "Monthly, Quarterly, or Annual",
+      "notes": "Annualize monthly rates as monthly_rate × 12"
+    },
+    {
+      "metric": "Hiring / Headcount Growth",
+      "recommended_time_granularity": "Monthly or Quarterly",
+      "notes": "Align with fiscal planning cycles"
+    },
+    {
+      "metric": "Performance",
+      "recommended_time_granularity": "Review cycle (semi-annual or annual)",
+      "notes": "Do not compare across different cycles without normalization"
+    },
+    {
+      "metric": "Promotions",
+      "recommended_time_granularity": "Annual review cycle",
+      "notes": "Promotions outside cycles may indicate exceptional cases"
+    },
+    {
+      "metric": "Salary Hikes",
+      "recommended_time_granularity": "Annual or per appraisal cycle",
+      "notes": "Compare hike percentages within the same appraisal year"
+    },
+    {
+      "metric": "Training Hours",
+      "recommended_time_granularity": "Monthly or Annual",
+      "notes": "Seasonal spikes such as onboarding are normal"
+    },
+    {
+      "metric": "Attendance",
+      "recommended_time_granularity": "Monthly",
+      "notes": "Yearly averages can mask seasonal dips"
+    },
+    {
+      "metric": "Overtime",
+      "recommended_time_granularity": "Monthly",
+      "notes": "Sustained overtime for 3+ months is more concerning than a one-month spike"
+    },
+    {
+      "metric": "Tenure",
+      "recommended_time_granularity": "Point-in-time snapshot",
+      "notes": "Report as of a specific date; cohort analysis adds richer context"
+    }
+  ],
+  "default_time_rule": "When the user does not specify a time period, use the most recent complete period available in the data and always state the period in the output.",
+  "chart_and_visualization_guidance": [
+    {
+      "question_type": "Distribution of a numeric field",
+      "recommended_chart": "Histogram or Box Plot",
+      "notes": "Use for salary, tenure, score to reveal skewness, outliers, and spread"
+    },
+    {
+      "question_type": "Category comparison",
+      "recommended_chart": "Bar Chart",
+      "notes": "Horizontal for many categories; sort descending"
+    },
+    {
+      "question_type": "Trend over time",
+      "recommended_chart": "Line Chart",
+      "notes": "Use for attrition, headcount, hiring by month or quarter"
+    },
+    {
+      "question_type": "Proportion",
+      "recommended_chart": "Pie Chart or Donut Chart",
+      "notes": "Limit to fewer than 5 categories; otherwise use stacked bar"
+    },
+    {
+      "question_type": "Two-variable relationship",
+      "recommended_chart": "Scatter Plot",
+      "notes": "Add regression line for trend visibility"
+    },
+    {
+      "question_type": "Performance distribution by segment",
+      "recommended_chart": "Grouped Bar Chart or Stacked Bar",
+      "notes": "Useful for high/mid/low performer splits"
+    },
+    {
+      "question_type": "Attrition by multiple dimensions",
+      "recommended_chart": "Heatmap",
+      "notes": "Rows = department, Columns = tenure band or designation"
+    },
+    {
+      "question_type": "Manager comparison",
+      "recommended_chart": "Horizontal Bar Chart",
+      "notes": "Sort by metric"
+    },
+    {
+      "question_type": "Cohort analysis",
+      "recommended_chart": "Line Chart with one line per cohort",
+      "notes": "X-axis = months since joining, Y-axis = retention rate"
+    },
+    {
+      "question_type": "Headcount change",
+      "recommended_chart": "Waterfall Chart",
+      "notes": "Shows hiring vs attrition net movement clearly"
+    },
+    {
+      "question_type": "Salary band positioning",
+      "recommended_chart": "Box Plot or Dot Plot with band overlays",
+      "notes": "Show positions relative to band min/mid/max"
+    }
+  ],
+  "chart_output_rule": "If the user asks for insights or analysis without specifying a chart, generate both a textual summary and a chart recommendation with the appropriate type and axes.",
+  "red_flag_indicators": [
+    {
+      "red_flag": "Stable headcount + rising regrettable attrition",
+      "what_it_may_indicate": "Organization is rehiring to replace talent it is losing"
+    },
+    {
+      "red_flag": "High engagement scores + rising exits",
+      "what_it_may_indicate": "Engagement surveys may be lagging indicators; deeper investigation needed"
+    },
+    {
+      "red_flag": "Fast hiring + stagnant or declining productivity",
+      "what_it_may_indicate": "Onboarding issues, role clarity gaps, or overstaffing"
+    },
+    {
+      "red_flag": "Promotion growth + no retention improvement",
+      "what_it_may_indicate": "Promotions are not addressing the root cause of attrition"
+    },
+    {
+      "red_flag": "High compensation increases + no performance improvement",
+      "what_it_may_indicate": "Compensation is being used reactively, not strategically"
+    },
+    {
+      "red_flag": "Strong attendance + low performance",
+      "what_it_may_indicate": "Presence without productivity; may indicate disengagement or role mismatch"
+    },
+    {
+      "red_flag": "Single manager with disproportionately high attrition",
+      "what_it_may_indicate": "Likely management quality issue isolated to one team"
+    },
+    {
+      "red_flag": "High attrition in the 1–2 year tenure band",
+      "what_it_may_indicate": "Onboarding and early-career development are failing"
+    },
+    {
+      "red_flag": "High attrition in the 5–7 year tenure band",
+      "what_it_may_indicate": "Mid-career stagnation; promotion or mobility pipeline is broken"
+    },
+    {
+      "red_flag": "Gender pay gap widening over appraisal cycles",
+      "what_it_may_indicate": "Systemic compensation bias that compounds over time"
+    },
+    {
+      "red_flag": "Zero internal mobility over 2+ review cycles",
+      "what_it_may_indicate": "Career development pathways are not functioning"
+    }
+  ],
+  "safe_vs_unsafe_assumptions": {
+    "safe_assumptions": [
+      "Salary is best compared within the same designation or job level",
+      "Attendance should be averaged, not summed, across employees",
+      "Performance scores are averaged at group level; distributions are preferred for deeper analysis",
+      "Department and designation are the strongest segmentation axes for most HR questions",
+      "employee_id is a unique row identifier and should never be used as a metric",
+      "Attrition analysis requires a defined time period; point-in-time data alone is insufficient",
+      "When a field is missing for some rows, note the gap rather than imputing a value"
+    ],
+    "unsafe_assumptions": [
+      {
+        "assumption": "Missing attendance value = absenteeism",
+        "why_wrong": "The field may simply not be captured"
+      },
+      {
+        "assumption": "High salary = overpayment",
+        "why_wrong": "May reflect retention strategy, role criticality, or long tenure"
+      },
+      {
+        "assumption": "Low salary = underpayment",
+        "why_wrong": "May be justified by role level, location, or recent hire timing"
+      },
+      {
+        "assumption": "Attrition always means voluntary resignation",
+        "why_wrong": "Could be involuntary, retirement, contract end, or death"
+      },
+      {
+        "assumption": "Employee dissatisfaction can be inferred from exit data alone",
+        "why_wrong": "Exits have multiple causes"
+      },
+      {
+        "assumption": "Missing values should be treated as zero",
+        "why_wrong": "Nulls often mean data was not captured"
+      },
+      {
+        "assumption": "All employees in the same department have the same role",
+        "why_wrong": "Departments are heterogeneous; designation matters"
+      },
+      {
+        "assumption": "High overtime = poor time management",
+        "why_wrong": "May reflect seasonal peaks, deadlines, or understaffing"
+      },
+      {
+        "assumption": "Low training hours = disengagement",
+        "why_wrong": "May reflect lack of available programs"
+      },
+      {
+        "assumption": "Same performance score = same output value",
+        "why_wrong": "Output value varies significantly by role and seniority"
+      }
+    ]
+  },
+  "role_specific_interpretation": [
+    {
+      "role_type": "Sales / Business Development",
+      "key_considerations": "High variable pay is normal; base salary comparisons alone are misleading. Target achievement and quota attainment are primary indicators."
+    },
+    {
+      "role_type": "Technical / Engineering Roles",
+      "key_considerations": "Critical talent classification is common; market salary premiums may justify above-band compensation. Hard to backfill quickly."
+    },
+    {
+      "role_type": "Leadership / Executive Roles",
+      "key_considerations": "Compensation exceptions are more frequent and often board-approved. Succession planning is a Tier 1 priority."
+    },
+    {
+      "role_type": "Support / Administrative Functions",
+      "key_considerations": "Performance is often measured differently from revenue-generating roles. Salary bands may be tighter. Lower promotion frequency is structurally normal."
+    },
+    {
+      "role_type": "Operations / Manufacturing Roles",
+      "key_considerations": "Attendance and overtime metrics carry higher operational weight. Safety-related training completion is critical."
+    },
+    {
+      "role_type": "New Hires (< 6 months)",
+      "key_considerations": "Performance scores during probation are early signals, not definitive assessments. Attrition may relate to onboarding, fit, or expectation mismatch."
+    },
+    {
+      "role_type": "Individual Contributors vs. Managers",
+      "key_considerations": "ICs should not be penalized for long tenure without promotion if they are not on a management track. Manager metrics differ from IC metrics."
+    }
+  ],
+  "guardrails_and_hard_rules": {
+    "query_generation_rules": [
+      "Never use employee_id as a measure or aggregate it",
+      "Never SUM percentages such as attendance or performance scores expressed as percentages",
+      "Always filter for the relevant population such as active employees only unless analyzing exits",
+      "When grouping by a dimension, ensure the dimension has low enough cardinality to be meaningful",
+      "When joining tables, always validate that the join key is unambiguous and specify the join type explicitly",
+      "Never treat NULL as zero in calculations; use COALESCE only when logically justified and stated"
+    ],
+    "insight_generation_rules": [
+      "Do not state causation where only correlation is observed",
+      "Do not flag a metric as a red flag without qualifying context",
+      "If data is insufficient to answer a question, state this explicitly rather than guessing",
+      "When multiple interpretations are possible, surface the most likely one and note alternatives"
+    ],
+    "output_format_rules": [
+      "Always state the time period of analysis in the output",
+      "Always state the filters applied",
+      "When presenting a metric, always include the base population size",
+      "Do not produce a visualization recommendation without describing the axes and what the chart will show"
+    ]
+  },
+  "usage_hint": {
+    "recommended_pipeline_usage": [
+      "store alongside dataset metadata",
+      "inject into PySpark generation prompts",
+      "inject into analysis and summarization prompts",
+      "use as domain guardrail layer in analytics workflows"
+    ]
+  }
+}

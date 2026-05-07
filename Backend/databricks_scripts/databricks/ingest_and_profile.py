@@ -18,6 +18,9 @@ print(f"FILE_ID={file_id}")
 print(f"FILE_PATH={file_path}")
 print(f"FORMAT={file_format}")
 
+MAX_SAMPLE_VALUES_PER_COLUMN = 3
+MAX_SAMPLE_VALUE_CHARS = 80
+
 # ---------------------------------------------------------
 # Detect CSV delimiter
 # ---------------------------------------------------------
@@ -36,6 +39,16 @@ def detect_delimiter(path):
 
     except:
         return ","
+
+
+def _compact_sample_value(value):
+    if value is None:
+        return None
+
+    text = str(value)
+    if len(text) > MAX_SAMPLE_VALUE_CHARS:
+        return text[:MAX_SAMPLE_VALUE_CHARS - 3] + "..."
+    return text
 
 
 # ---------------------------------------------------------
@@ -153,9 +166,9 @@ for field in df.schema.fields:
     # -----------------------------------------------------
     sample_values = []
 
-    for row in sample_rows:
+    for row in sample_rows[:MAX_SAMPLE_VALUES_PER_COLUMN]:
         val = row[col_name]
-        sample_values.append(str(val) if val is not None else None)
+        sample_values.append(_compact_sample_value(val))
 
     column_profile = {
         "column_name": col_name,

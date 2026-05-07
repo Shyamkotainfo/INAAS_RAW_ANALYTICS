@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 from analytics.dataset_overview_generator import DatasetOverviewGenerator
 from config.settings import settings
 from core.query_orchestrator import QueryOrchestrator
@@ -33,6 +34,7 @@ class StartProfilingRequest(BaseModel):
     dataset_id: str
     file_path: str
     file_format: str
+    semantic_context: Optional[str] = None
     business_context: str | None = None
 
 
@@ -98,22 +100,29 @@ async def upload_dataset(
 def start_profiling(request: StartProfilingRequest):
     try:
         selected_context = (request.business_context or "none").strip().lower()
-        if selected_context not in {"none", "hr"}:
+        allowed_contexts = {"none", *settings.DOMAIN_WIKI_ROOTS.keys()}
+        if selected_context not in allowed_contexts:
             raise HTTPException(
                 status_code=400,
-                detail="business_context must be either 'none' or 'hr'"
+                detail=(
+                    "business_context must be one of: "
+                    + ", ".join(sorted(allowed_contexts))
+                )
             )
 
         semantic_context = None
-        if selected_context == "hr":
-            semantic_context = settings.DOMAIN_WIKI_ROOTS.get("hr")
+        selected_domain = None
+        if selected_context != "none":
+            selected_domain = selected_context
+            semantic_context = settings.DOMAIN_WIKI_ROOTS.get(selected_domain)
 
         session_orchestrator = QueryOrchestrator()
         profiling = session_orchestrator.attach_file(
             file_id=request.dataset_id,
             file_path=request.file_path,
             file_format=request.file_format,
-            context=semantic_context
+            context=request.semantic_context,
+            domain=selected_domain
         )
         dataset_sessions[request.dataset_id] = session_orchestrator
 
