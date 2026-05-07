@@ -81,66 +81,6 @@ BUSINESS RULE (USE WHEN PRESENT):
 HARD GUARDRAILS:
 {(guardrails or "None").strip()}
 
-=====================================================
-AVAILABLE COLUMNS (exact names, base dataset only)
-=====================================================
-
-{columns}
-
-=====================================================
-SEMANTIC CONTEXT
-=====================================================
-
-{semantic_context or "No additional semantic context provided."}
-
-SEMANTIC CONTEXT USAGE RULES:
-- Treat SEMANTIC CONTEXT as business guidance only, not as additional schema.
-- NEVER use a semantic concept as a DataFrame column unless that exact column exists in AVAILABLE COLUMNS.
-- If a failing query used concepts like Department, Manager, Location, Business Unit, or compensation band as if they were real columns, remove those references unless the exact column exists.
-
-=====================================================
-RESOLVED TERM MAPPINGS
-=====================================================
-
-{resolved_terms or "No explicit term mappings resolved."}
-
-RESOLUTION RULES:
-- If the user used a business term that appears in RESOLVED TERM MAPPINGS, rewrite the code to use the mapped real column.
-- Prefer resolved mappings over guessing new column names.
-BUSINESS CONTEXT
-=====================================================
-
-{semantic_context or "No additional business context provided."}
-
-BUSINESS CONTEXT RULES:
-- Treat BUSINESS CONTEXT as business guidance only, not as additional schema.
-- NEVER keep or introduce a column reference just because the business context mentions that concept.
-- If failing code used a business term as if it were a real column, replace it with a real dataset column only when the mapping is clearly supported by AVAILABLE COLUMNS.
-- ALWAYS prioritize executable correctness against AVAILABLE COLUMNS.
-
-=====================================================
-USER QUESTION
-=====================================================
-
-{question}
-
-=====================================================
-FAILING CODE
-=====================================================
-OPTIONAL SUPPORTING CONTEXT:
-{(semantic_context or "None").strip()}
-
-AVAILABLE HELPERS:
-- as_text("column_name"): trimmed string value
-- as_double("column_name"): numeric cast that handles values like "93,97"
-- as_int("column_name"): integer cast built from as_double
-- as_date("column_name"): date cast for yyyy-mm-dd and timestamp-like strings
-- as_bool_flag("column_name"): boolean cast for TRUE/FALSE/1/0 text flags
-- as_priority_rank("column_name"): maps High/Medium/Low text priority to 3/2/1
-
-FAILING CODE:
-{failing_code}
-
 EXECUTION ERROR:
 {error_message}
 
@@ -211,25 +151,6 @@ Return ONLY executable PySpark code.
    - Especially for attrition, compensation, promotion, and retention analysis.
    - If the first attempt used an invalid business assumption, rewrite the logic instead of only replacing column names.
 
-=====================================================
-CHAIN OF THOUGHT (MANDATORY - use # comments)
-=====================================================
-
-Before writing corrected code, reason through:
-# Root cause  : What exactly caused the error?
-# Fix strategy : What specific line(s) need to change and why?
-# Column check : Which references are base columns versus valid derived columns?
-# Schema check : Are all DataFrames consistent before any union?
-
-=====================================================
-OUTPUT FORMAT
-=====================================================
-
-Return ONLY executable Python code.
-Start with your # comments.
-Then write the corrected PySpark code.
-Do NOT include markdown block markers (e.g. ```python).
-The final line MUST assign the result to: final_df
 USER QUESTION:
 {question}
 """

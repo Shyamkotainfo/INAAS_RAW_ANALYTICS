@@ -875,6 +875,7 @@ class ApiService {
     dataset_id?: string,
     file_path?: string,
     file_format: string = "",
+    business_context?: string,
   ) {
     try {
       const response = await fetch(
@@ -887,7 +888,8 @@ class ApiService {
           body: JSON.stringify({
             dataset_id: dataset_id,
             file_path: file_path,
-            file_format: file_format
+            file_format: file_format,
+            business_context: business_context
           })
         }
       );
@@ -971,6 +973,34 @@ class ApiService {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
+      });
+
+
+      const data = await response.json();
+
+      // 
+
+      return data; // should match ProfilingResponse
+    } catch (error) {
+      console.error("Profiling API Error:", error);
+      return {
+        success: false,
+        error: "Failed to fetch profiling data",
+      };
+    }
+  }
+  async postSchemaUpload(
+    file?: File
+  ) {
+    try {
+      const formData = new FormData();
+      if (file) {
+        formData.append("file", file);
+      }
+      const response = await fetch('https://dspm4zcmke.us-east-1.awsapprunner.com/schema/upload', {
+        method: 'POST',
+        // headers: { 'Content-Type': 'application/json' },
+        body: formData
       });
 
 

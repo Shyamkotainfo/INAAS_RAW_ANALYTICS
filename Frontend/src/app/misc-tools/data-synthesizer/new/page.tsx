@@ -125,7 +125,7 @@ export default function DataSynthesizer() {
   // const [history, setHistory] = useState<HistoryEntry[]>(initialHistory);
   const [viewSchemaEntry, setViewSchemaEntry] = useState<HistoryEntry | null>(null);
   const [downloadLink, setDownloadLink] = useState<string>("");
-  const handleSchemaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSchemaUpload = async(e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const validExts = [".json", ".yaml", ".yml", ".avsc", ".xsd", ".csv"];
@@ -136,14 +136,30 @@ export default function DataSynthesizer() {
     }
     const size = file.size < 1024 ? `${file.size} B` : file.size < 1048576 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / 1048576).toFixed(1)} MB`;
     setSchemaFile({ name: file.name, size });
+    const res = await apiService.postSchemaUpload(file);
+
     toast({ title: "Schema file uploaded", description: `${file.name} loaded. Fields will be auto-populated.` });
     // Mock: add sample fields from schema
-    setFields([
-      { ...defaultField(), name: "id", type: "uuid" },
-      { ...defaultField(), name: "created_at", type: "datetime" },
-      { ...defaultField(), name: "status", type: "enum", enumValues: "active, inactive, pending" },
-      { ...defaultField(), name: "amount", type: "float", distribution: "normal" },
-    ]);
+    // setFields([
+    //   { ...defaultField(), name: "id", type: "uuid" },
+    //   { ...defaultField(), name: "created_at", type: "datetime" },
+    //   { ...defaultField(), name: "status", type: "enum", enumValues: "active, inactive, pending" },
+    //   { ...defaultField(), name: "amount", type: "float", distribution: "normal" },
+    // ]);
+      const mappedFields: SynthField[] = res.columns.map((col: any) => ({
+      id: crypto.randomUUID(),
+      name: col.name,
+      type: (col.type || "string") as FieldType,
+      distribution: "uniform",
+      nullable: col.nullable ?? true,
+      nullPercent: col.nullable ? 5 : 0,
+      minValue: "",
+      maxValue: "",
+      enumValues: "",
+      pattern: "",
+    }));
+        setFields(mappedFields);
+
   };
 
   const removeSchemaFile = () => {
@@ -263,7 +279,6 @@ export default function DataSynthesizer() {
     setAnalysing(true);
 
     try {
-      // Your existing API call - replace 'YOUR_API_ENDPOINT' with actual endpoint if different
       console.log(payload)
 
       await apiService.postDataAnalysis(payload)

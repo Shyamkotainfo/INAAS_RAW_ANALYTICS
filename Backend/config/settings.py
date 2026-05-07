@@ -17,7 +17,7 @@ from pydantic import AliasChoices, Field, validator
 class Settings(BaseSettings):
     DOMAIN_WIKI_ROOTS: ClassVar[dict[str, str]] = {
         "hr": "/Volumes/inaas_dev/raw_analytics/hr",
-        "manufacturing": "/Volumes/inaas_dev/raw_analytics/supply-chain",
+        "manufacturing": "/Volumes/inaas_dev/raw_analytics/supply-chain"
     }
 
     # =========================
