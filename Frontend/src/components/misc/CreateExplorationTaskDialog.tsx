@@ -147,6 +147,8 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
               <option value="raw_data">None</option>
 
               <option value="hr">HR</option>
+              <option value="manufacturing">Manufacturing</option>
+
             </select>
           </div>
 
@@ -192,7 +194,7 @@ export function CreateExplorationTaskDialog({ open, onOpenChange, onSubmit }: Cr
                   </div>
                 )}
 
-                { file && (
+                {file && (
                   <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30 mt-3">
                     <File className="w-4 h-4 text-primary flex-shrink-0" />
                     <div className="flex-1 min-w-0">
