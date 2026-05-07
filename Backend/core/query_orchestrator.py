@@ -4,7 +4,6 @@ import json
 import re
 from typing import Any
 import hashlib
-
 from logger.logger import get_logger
 from execution.databricks_executor import DatabricksExecutor
 from ingestion.metadata_uploader import MetadataUploader
