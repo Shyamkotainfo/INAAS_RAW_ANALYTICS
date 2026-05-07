@@ -14,10 +14,6 @@ def strip_code_fences(code: str) -> str:
 
 import re
 
-
-import re
-
-
 def rewrite_common_pyspark_imports(code: str) -> str:
     """
     Rewrite unsafe PySpark patterns into sandbox-safe equivalents.
@@ -26,6 +22,11 @@ def rewrite_common_pyspark_imports(code: str) -> str:
     # Remove pyspark.sql.functions imports
     code = re.sub(
         r"from\s+pyspark\.sql\.functions\s+import\s+\w+.*\n?",
+        "",
+        code
+    )
+    code = re.sub(
+        r"from\s+pyspark\.sql\s+import\s+functions\s+as\s+F\s*\n?",
         "",
         code
     )
@@ -47,3 +48,29 @@ def rewrite_common_pyspark_imports(code: str) -> str:
 
     return code.strip()
 
+
+def strip_helper_redefinitions(code: str) -> str:
+    """
+    Remove LLM-defined helper functions that shadow runtime-provided helpers.
+    """
+    helper_names = [
+        "as_text",
+        "as_double",
+        "as_int",
+        "as_date",
+        "as_bool_flag",
+        "as_priority_rank",
+    ]
+    for helper_name in helper_names:
+        code = re.sub(
+            rf"(?ms)^def\s+{helper_name}\s*\([^)]*\):\n(?:^[ \t].*\n|^\n)*",
+            "",
+            code
+        )
+    return code.strip()
+    
+def sanitize(code: str) -> str:
+    code = strip_code_fences(code)
+    code = rewrite_common_pyspark_imports(code)
+    code = strip_helper_redefinitions(code)
+    return code.strip()

@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ArrowLeft, Database, BarChart3, ChevronDown, TableIcon, Sparkles, User, Calendar, File, Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, ReactNode, useRef } from "react";
 import { apiService } from "@/services/apiService";
 import DeepExplorerInsight, { ResponseEntry } from "@/components/DeepExplorer";
@@ -43,6 +43,17 @@ interface ProfileUploadResponse {
   dataset_id: string;
   file_path: string;
   file_format: string;
+}
+
+function getStoredUploadData(): ProfileUploadResponse | null {
+  const stored = sessionStorage.getItem("profilingUpload");
+  if (!stored) return null;
+
+  try {
+    return JSON.parse(stored) as ProfileUploadResponse;
+  } catch {
+    return null;
+  }
 }
 
 interface CollapsiblePanelProps {
@@ -81,6 +92,7 @@ function CollapsiblePanel({ title, defaultOpen = true, badge, children }: Collap
 export default function ExplorationTaskDetail() {
 
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [data, setData] = useState<ProfilingResponse | null>(null);
   const [uploadData, setUploadData] = useState<ProfileUploadResponse | null>(null);
@@ -96,10 +108,28 @@ export default function ExplorationTaskDetail() {
       if (fetchedRef.current) return;
       fetchedRef.current = true;
 
-      const stored = sessionStorage.getItem("profilingUpload");
-      const profiling = stored ? JSON.parse(stored) : null;
+      const uploadFromQuery = {
+        success: true,
+        dataset_id: searchParams.get("dataset_id") ?? "",
+        file_path: searchParams.get("file_path") ?? "",
+        file_format: searchParams.get("file_format") ?? "",
+      };
+      const storedUpload = getStoredUploadData();
+      const profiling =
+        uploadFromQuery.dataset_id &&
+        uploadFromQuery.file_path &&
+        uploadFromQuery.file_format
+          ? uploadFromQuery
+          : storedUpload;
 
       setUploadData(profiling);
+
+      if (!profiling?.dataset_id || !profiling.file_path || !profiling.file_format) {
+        setLoading(false);
+        return;
+      }
+
+      sessionStorage.setItem("profilingUpload", JSON.stringify(profiling));
 
       const result = await apiService.getDatasetProfiling(
         profiling.dataset_id,
@@ -113,7 +143,7 @@ export default function ExplorationTaskDetail() {
 
     })();
 
-  }, []);
+  }, [searchParams]);
 
   if (loading) {
     return (
@@ -129,7 +159,9 @@ export default function ExplorationTaskDetail() {
     return (
       <AppLayout title="Task Not Found">
         <div className="py-20 text-center">
-          Failed to load dataset.
+          {uploadData
+            ? "Failed to load dataset."
+            : "Dataset details are missing. Reopen this task from the upload flow."}
         </div>
       </AppLayout>
     );

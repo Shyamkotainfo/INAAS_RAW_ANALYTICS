@@ -1,34 +1,146 @@
-def get_pyspark_prompt(columns: str, question: str) -> str:
+from prompt.wiki_retriever import load_domain_semantic_context, retrieve_relevant_chunks
+
+
+def get_pyspark_prompt(
+    columns: str,
+    question: str,
+    semantic_context: str | None = None,
+    resolved_terms: dict[str, str] | None = None
+) -> str:
+    pass
+
+
+# def build_semantic_context(question: str, columns: str, top_k: int = 3) -> str:
+def build_semantic_context(domain: str | None, question: str, columns: str, top_k: int = 1) -> str:
+    """
+    Optional supporting context only.
+    This is allowed to provide glossary and narrative support, but it is not the
+    primary semantic source for business-rule enforcement.
+    """
+    if domain and domain != "hr":
+        return load_domain_semantic_context(domain)
+
+    return retrieve_relevant_chunks(
+        question=question,
+        schema_columns=columns,
+        top_k=top_k
+    )
+
+
+def _format_columns(columns: str) -> str:
+    column_names = [column.strip() for column in columns.split(",") if column.strip()]
+    return "\n".join(f"- {column}" for column in column_names) or "- None"
+
+
+def _format_mappings(resolved_mappings: dict[str, str]) -> str:
+    if not resolved_mappings:
+        return "- None"
+
+    lines = []
+    for logical_name, physical_name in resolved_mappings.items():
+        lines.append(f"- {logical_name} -> {physical_name}")
+    return "\n".join(lines)
+
+
+def _format_rule(business_rule: dict | None) -> str:
+    if not business_rule:
+        return "None. Use schema-only reasoning and do not invent business logic."
+
+    lines = []
+    rule_name = business_rule.get("name", "unknown_rule")
+    lines.append(f"Rule name: {rule_name}")
+    lines.append(f"Definition: {business_rule.get('definition', 'N/A')}")
+
+    required_fields = business_rule.get("required_fields", [])
+    if required_fields:
+        lines.append("Required logical fields:")
+        lines.extend(f"- {field}" for field in required_fields)
+
+    required_any_of = business_rule.get("required_any_of", [])
+    if required_any_of:
+        lines.append("Require at least one of:")
+        lines.extend(f"- {field}" for field in required_any_of)
+
+    rule_steps = business_rule.get("rule", [])
+    if rule_steps:
+        lines.append("Rule steps:")
+        lines.extend(f"- {step}" for step in rule_steps)
+
+    voluntary_examples = business_rule.get("voluntary_examples", [])
+    if voluntary_examples:
+        lines.append("Voluntary examples:")
+        lines.extend(f"- {value}" for value in voluntary_examples)
+
+    involuntary_examples = business_rule.get("involuntary_examples", [])
+    if involuntary_examples:
+        lines.append("Involuntary examples:")
+        lines.extend(f"- {value}" for value in involuntary_examples)
+
+    fallback = business_rule.get("fallback")
+    if fallback:
+        lines.append(f"Fallback: {fallback}")
+
+    missing_fields = business_rule.get("missing_required_fields", [])
+    if missing_fields:
+        lines.append("Missing required logical fields:")
+        lines.extend(f"- {field}" for field in missing_fields)
+
+    return "\n".join(lines)
+
+
+def _format_supporting_context(semantic_context: str | None) -> str:
+    if semantic_context and semantic_context.strip():
+        return semantic_context.strip()
+    return "None"
+
+
+def get_pyspark_prompt(
+    columns: str,
+    question: str,
+    resolved_mappings: dict[str, str] | None = None,
+    business_rule: dict | None = None,
+    guardrails: str | None = None,
+    semantic_context: str | None = None,
+) -> str:
     return f"""
-You are an **Elite Data Science and Analytics Agent** specializing in Raw Data Exploration using PySpark.
+You are generating executable PySpark code.
 
-Your goal is to act as an autonomous analyst operating in TWO modes:
-- MODE A: META / STRUCTURAL questions → Understand WHAT the data IS before any analysis.
-- MODE B: ANALYTICAL questions → Answer business questions using the data.
+AVAILABLE COLUMNS:
+{_format_columns(columns)}
 
-A raw DataFrame named `df` already exists. The environment provides:
-`from pyspark.sql import functions as F`
-`from pyspark.sql import Window`
+RESOLVED COLUMN MAPPINGS (USE WHEN PRESENT):
+{_format_mappings(resolved_mappings or {})}
 
-You MUST NOT import anything. The above imports are ALREADY done for you.
+BUSINESS RULE (USE WHEN PRESENT):
+{_format_rule(business_rule)}
 
-=====================================================
-MODE DETECTION (READ FIRST — ALWAYS)
-=====================================================
+HARD GUARDRAILS:
+{(guardrails or "None").strip()}
 
-Before doing anything else, classify the user's question into MODE A or MODE B.
+OPTIONAL SUPPORTING CONTEXT:
+{_format_supporting_context(semantic_context)}
 
-MODE A — META / STRUCTURAL (triggered by phrases like):
-  "what are the dimensions", "what are the measures", "what does one row represent",
-  "what is the grain", "what columns do I have", "profile this dataset", "give me an overview",
-  "what kind of dataset is this", "what are the date columns", "time range", "data quality",
-  "are there nulls", "duplicates", "what can I join", "foreign keys", "summarize the schema",
-  "what is in this dataset", "what can I slice by", "what can I aggregate",
-  "what hierarchies exist", "country state city", "parent child", "is there a hierarchy", "drill down",
-  "is this raw", "level of aggregation", "granularity", "is this summarized", "rolled up",
-  "gaps in time", "missing days", "missing weeks", "are there gaps", "time coverage", "continuity",
-  "what kpis", "what metrics can i derive", "business metrics", "primary business outcome",
-  "what can i measure", "which column is the key metric", "what can I build a dashboard from"
+AVAILABLE HELPERS:
+- as_text("column_name"): trimmed string value
+- as_double("column_name"): numeric cast that handles values like "93,97"
+- as_int("column_name"): integer cast built from as_double
+- as_date("column_name"): date cast for yyyy-mm-dd and timestamp-like strings
+- as_bool_flag("column_name"): boolean cast for TRUE/FALSE/1/0 text flags
+- as_priority_rank("column_name"): maps High/Medium/Low text priority to 3/2/1
+
+HARD RULES:
+- NEVER invent column names.
+- ONLY use exact columns from AVAILABLE COLUMNS.
+- NEVER convert business concepts into fake columns.
+- RESOLVED COLUMN MAPPINGS override your guesses when present.
+- BUSINESS RULE must be applied exactly when present.
+- If required fields are missing, return a one-row DataFrame with status = "CANNOT_COMPUTE" and a reason column.
+- NEVER use SQL.
+- ONLY use DataFrame API.
+- When comparing, sorting, or aggregating string-encoded numeric/date/flag columns, use the helper functions first.
+- NEVER redefine helper functions such as as_date, as_double, as_int, as_bool_flag, or as_priority_rank.
+- If a priority column contains labels like High, Medium, Low, rank it with as_priority_rank instead of casting it to int.
+- ALWAYS assign the final result to final_df.
 
 MODE B — ANALYTICAL (everything else):
   Aggregations, trends, filters, top-N, distributions, comparisons, cohorts, anomalies.
@@ -38,6 +150,41 @@ AVAILABLE COLUMNS
 =====================================================
 
 {columns}
+
+=====================================================
+SEMANTIC CONTEXT
+=====================================================
+
+{semantic_context or "No additional semantic context provided."}
+
+SEMANTIC CONTEXT USAGE RULES:
+- Treat SEMANTIC CONTEXT as business guidance only, not as additional schema.
+- NEVER use a semantic concept as a DataFrame column unless that exact column exists in AVAILABLE COLUMNS.
+- If SEMANTIC CONTEXT mentions concepts like Department, Manager, Location, Business Unit, band, or level but no matching base column exists, do not generate PySpark that references them.
+- If the user asks for an unavailable semantic concept, answer with the closest supported available columns instead of inventing a field.
+
+=====================================================
+RESOLVED TERM MAPPINGS
+=====================================================
+
+{resolved_terms or "No explicit term mappings resolved."}
+
+RESOLUTION RULES:
+- If the user uses a business term that appears in RESOLVED TERM MAPPINGS, use the mapped real column from AVAILABLE COLUMNS.
+- Prefer resolved mappings over guessing.
+- Only fail a concept when no safe mapping exists and no matching base column exists.
+BUSINESS CONTEXT
+=====================================================
+
+{semantic_context or "No additional business context provided."}
+
+BUSINESS CONTEXT RULES:
+- Treat BUSINESS CONTEXT as business guidance only, not as physical schema.
+- Use BUSINESS CONTEXT to improve business reasoning, KPI interpretation, and guardrail awareness.
+- NEVER invent columns from BUSINESS CONTEXT alone.
+- ALWAYS prioritize the real dataset columns listed in AVAILABLE COLUMNS.
+- If BUSINESS CONTEXT mentions a concept but no matching column exists in AVAILABLE COLUMNS, do not generate PySpark that references a made-up field.
+- Use BUSINESS CONTEXT to improve reasoning, not to extend the schema.
 
 =====================================================
 MODE A — META / STRUCTURAL INTELLIGENCE
@@ -260,13 +407,42 @@ Raw data is always dirty. ALWAYS anticipate nulls, mixed cases, and string-encod
 - Numeric text cleaning  : F.regexp_replace(F.col("col"), "[^0-9.-]", "").cast("double")
 - Date string parsing    : F.to_date(F.col("col"), "yyyy-MM-dd") or F.to_timestamp(...)
 - Null handling          : F.col("col").isNotNull() before aggregating when needed.
-- If a column concept is mentioned but not found exactly, infer the closest semantic match from AVAILABLE COLUMNS.
+- If a column concept is mentioned but not found exactly, use RESOLVED TERM MAPPINGS when available.
+- Do not infer a new schema column from SEMANTIC CONTEXT alone.
+
+=====================================================
+DERIVED COLUMN AND JOIN SAFETY
+=====================================================
+
+- AVAILABLE COLUMNS applies to the base dataset only.
+- You MAY introduce derived columns through `.alias(...)`, `.withColumn(...)`, `.agg(...alias(...))`, and joins on intermediate DataFrames.
+- Once a derived column is created, you MAY reference it in later steps on that DataFrame lineage.
+- For joined DataFrames, you MAY use columns coming from either joined side, then create additional derived columns from the join result.
+- Do not treat valid intermediate columns such as `avg_pay` as schema violations after they are created.
+
+=====================================================
+COMPENSATION ANALYSIS RULES
+=====================================================
+
+- Treat `Pay` as compensation-like text, not as a numeric column until you normalize it.
+- Before any compensation filter, comparison, ranking, percentile, min/max, or aggregation:
+  use `F.regexp_extract(F.upper(F.trim(F.col("Pay"))), "([0-9]+(?:\\.[0-9]+)?)", 1).cast("double")`
+  and store it in a derived numeric column such as `pay_numeric`.
+- If the cleaned compensation value is null, exclude it from compensation math.
+- Do NOT interpret the phrase "compensation band" as "average compensation" unless explicit band metadata exists in SEMANTIC CONTEXT.
+- If band metadata is not present in SEMANTIC CONTEXT and the user asks about compensation band:
+  default to comparing against designation-level average compensation and make that fallback explicit.
+- Do NOT invent salary bands, buckets, min/max thresholds, or percentile cutoffs unless they are explicitly defined in SEMANTIC CONTEXT or explicitly requested by the user.
+- If the user asks for percentile-style or min/max banding and SEMANTIC CONTEXT does not define bands, compute those only when the user explicitly asks for that comparison.
+- If BUSINESS CONTEXT suggests a business concept but the actual column does not exist, fall back only to the closest real column when that mapping is obvious from AVAILABLE COLUMNS.
 
 =====================================================
 ABSOLUTE RULES (NO EXCEPTIONS)
 =====================================================
 
 - NEVER INVENT COLUMN NAMES. ONLY use exact column names from AVAILABLE COLUMNS above.
+- NEVER convert semantic-layer concepts into DataFrame columns unless the exact column exists in AVAILABLE COLUMNS.
+- NEVER convert a business concept from BUSINESS CONTEXT into a DataFrame column unless that exact column exists in AVAILABLE COLUMNS.
 - NEVER use SQL queries. NEVER spark.sql(). Only DataFrame APIs.
 - NEVER use python loops (for, while), list comprehensions, or pandas logic.
 - ALWAYS use F. prefix for all functions (e.g. F.col(), F.sum(), F.count()).
@@ -354,14 +530,15 @@ Question: Are there nulls in this dataset?
 # 2. Type    : TYPE 5 — Data Quality Profiling
 # 3. Columns : All columns from AVAILABLE COLUMNS
 # 4. Cleaning: No cleaning needed — computing null counts directly.
-# 5. Strategy: select F.sum(F.when(isNull, 1)) per column → compute null_pct → quality_flag.
-
-total_rows = df.select(F.count("*")).collect()[0][0]
+# 5. Strategy: compute total_rows and null_count in one aggregation → derive null_pct → quality_flag.
 
 final_df = df.select(
-    F.lit("Status").alias("column_name"),
+    F.count("*").alias("total_rows"),
     F.sum(F.when(F.col("Status").isNull(), 1).otherwise(0)).alias("null_count")
-).withColumn("null_pct", F.round(F.col("null_count") / F.lit(total_rows) * 100, 2)
+).select(
+    F.lit("Status").alias("column_name"),
+    F.col("null_count"),
+    F.round(F.col("null_count") / F.col("total_rows") * 100, 2).alias("null_pct")
 ).withColumn("quality_flag", F.when(F.col("null_pct") > 20, "LOW_QUALITY")
                                .when(F.col("null_pct") > 5,  "MEDIUM_QUALITY")
                                .otherwise("HIGH_QUALITY"))
@@ -401,6 +578,38 @@ final_df = df.groupBy(F.to_date(F.col("Sale_Date"), "yyyy-MM-dd").alias("sale_da
 =====================================================
 USER QUESTION
 =====================================================
+VALUE MATCHING RULES (CRITICAL):
 
+- NEVER rely on exact string matches for categorical values.
+- ALWAYS use case-insensitive matching using lower().
+
+- For voluntary exits:
+  match values containing:
+    "resign", "voluntary"
+
+- For involuntary exits:
+  match values containing:
+    "involuntary", "terminate"
+
+- For retirement:
+  match values containing:
+    "retire"
+
+- Example:
+  Instead of:
+    df["TerminationType"].isin(["Resigned"])
+  Use:
+    F.lower(F.col("TerminationType")).contains("resign")
+
+- Combine conditions using OR where appropriate.
+
+Before code, write only short # comments:
+# 1. columns used
+# 2. cleaning needed
+# 3. transformation strategy
+
+Return ONLY executable PySpark code.
+
+USER QUESTION:
 {question}
 """

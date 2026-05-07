@@ -1,0 +1,29 @@
+{
+  "dataset_context": {
+    "dataset_name": "Dev_Tables",
+    "domain": "HR / employee master data",
+    "primary_entity": "person_profile",
+    "row_meaning": "Each row is one employee or consultant with current role, education details, and prior employment history.",
+    "information_blocks": [
+      "identity",
+      "current_employment",
+      "education",
+      "prior_experience",
+      "compensation"
+    ],
+    "interpretation_rules": [
+      "Treat company1/company2/company3 and matching JobTitle fields as ordered prior work history.",
+      "Treat Pay as compensation-like text in LPA format and normalize it before analytics.",
+      "Do not assume EmpCode is globally unique."
+    ],
+    "retrieval_bias": [
+      "Prefer person-level summaries.",
+      "Support filters on designation, employment type, education, joining date, and prior employers.",
+      "Support similarity retrieval based on role background, education, and previous companies."
+    ]
+  },
+  "notes": {
+    "dataset_only": true,
+    "scope": "HR dataset context only; excludes generic vector DB guidance not specific to the source file."
+  }
+}
