@@ -117,11 +117,12 @@ export default function ExplorationTaskDetail() {
       const storedUpload = getStoredUploadData();
       const profiling =
         uploadFromQuery.dataset_id &&
-        uploadFromQuery.file_path &&
-        uploadFromQuery.file_format
+          uploadFromQuery.file_path &&
+          uploadFromQuery.file_format
           ? uploadFromQuery
           : storedUpload;
-
+      const storedDomain = sessionStorage.getItem("profilingDomain");
+      const domain = storedDomain ? storedDomain : undefined;
       setUploadData(profiling);
 
       if (!profiling?.dataset_id || !profiling.file_path || !profiling.file_format) {
