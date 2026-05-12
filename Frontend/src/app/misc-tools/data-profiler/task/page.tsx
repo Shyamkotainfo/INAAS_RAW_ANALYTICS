@@ -45,12 +45,28 @@ interface ProfileUploadResponse {
   file_format: string;
 }
 
+function isNonEmptyUploadValue(value: string | null | undefined): value is string {
+  if (typeof value !== "string") return false;
+  const normalized = value.trim();
+  return Boolean(normalized) && normalized !== "undefined" && normalized !== "null";
+}
+
+function isValidUploadData(data: Partial<ProfileUploadResponse> | null | undefined): data is ProfileUploadResponse {
+  return Boolean(
+    data &&
+    isNonEmptyUploadValue(data.dataset_id) &&
+    isNonEmptyUploadValue(data.file_path) &&
+    isNonEmptyUploadValue(data.file_format)
+  );
+}
+
 function getStoredUploadData(): ProfileUploadResponse | null {
   const stored = sessionStorage.getItem("profilingUpload");
   if (!stored) return null;
 
   try {
-    return JSON.parse(stored) as ProfileUploadResponse;
+    const parsed = JSON.parse(stored) as Partial<ProfileUploadResponse>;
+    return isValidUploadData(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -108,24 +124,22 @@ export default function ExplorationTaskDetail() {
       if (fetchedRef.current) return;
       fetchedRef.current = true;
 
-      const uploadFromQuery = {
+      const uploadFromQuery: Partial<ProfileUploadResponse> = {
         success: true,
-        dataset_id: searchParams.get("dataset_id") ?? "",
-        file_path: searchParams.get("file_path") ?? "",
-        file_format: searchParams.get("file_format") ?? "",
+        dataset_id: searchParams.get("dataset_id") ?? undefined,
+        file_path: searchParams.get("file_path") ?? undefined,
+        file_format: searchParams.get("file_format") ?? undefined,
       };
       const storedUpload = getStoredUploadData();
       const profiling =
-        uploadFromQuery.dataset_id &&
-          uploadFromQuery.file_path &&
-          uploadFromQuery.file_format
+        isValidUploadData(uploadFromQuery)
           ? uploadFromQuery
           : storedUpload;
       const storedDomain = sessionStorage.getItem("profilingDomain");
       const domain = storedDomain ? storedDomain : undefined;
       setUploadData(profiling);
 
-      if (!profiling?.dataset_id || !profiling.file_path || !profiling.file_format) {
+      if (!isValidUploadData(profiling)) {
         setLoading(false);
         return;
       }
@@ -139,7 +153,7 @@ export default function ExplorationTaskDetail() {
         domain
       );
 
-      if (result.success) setData(result);
+      if (result.success && result.profiling) setData(result);
 
       setLoading(false);
 

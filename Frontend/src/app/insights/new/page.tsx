@@ -2628,7 +2628,7 @@ export default function CreateInsight() {
                                   </TabsTrigger>
                                 )}
                                 <TabsTrigger value="pyspark">
-                                  Generated PYS Park
+                                  Generated Pyspark
                                 </TabsTrigger>
                               </TabsList>
                             </div>

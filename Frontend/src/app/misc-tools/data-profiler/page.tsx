@@ -176,16 +176,16 @@ export default function DataExplorer() {
   }) => {
     try {
       const result = await apiService.uploadDataset(task.file, task.file_url);
-
-      // if (!result.success) {
-      //   toast.error(result.error || "Upload failed");
-      //   return;
-      // }
+      if (!result.success || !result.dataset_id || !result.file_path || !result.file_format) {
+        toast.error(result.error || "Upload failed");
+        return;
+      }
 
       toast.success("Dataset uploaded successfully");
 
       // Navigate to task page using returned dataset_id
       sessionStorage.setItem("profilingUpload", JSON.stringify(result));
+      sessionStorage.setItem("profilingDomain", task.domain);
 
       const searchParams = new URLSearchParams({
         dataset_id: result.dataset_id,

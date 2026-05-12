@@ -895,16 +895,39 @@ class ApiService {
       );
 
       const data = await response.json();
+      if (!response.ok || !data?.success || !data?.job_id) {
+        return data;
+      }
 
-      // 
-
-      return data; // should match ProfilingResponse
+      return await this.pollProfilingStatus(data.job_id as string);
     } catch (error) {
       console.error("Profiling API Error:", error);
       return {
         success: false,
         error: "Failed to fetch profiling data",
       };
+    }
+  }
+  async getProfilingStatus(jobId: string) {
+    const response = await fetch(
+      `${this.baseUrl}/profiling-status/${jobId}`,
+      {
+        method: "GET",
+      }
+    );
+
+    return await response.json();
+  }
+  async pollProfilingStatus(jobId: string, intervalMs: number = 4000) {
+    while (true) {
+      const data = await this.getProfilingStatus(jobId);
+
+      if (data?.status === "RUNNING") {
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        continue;
+      }
+
+      return data;
     }
   }
   async uploadDataset(file?: File, file_url?: string) {

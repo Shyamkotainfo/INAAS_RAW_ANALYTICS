@@ -2051,7 +2051,7 @@ export default function DeepExplorerInsight({ dataset_id, responses, setResponse
                                                                 </TabsTrigger>
                                                             )}
                                                             <TabsTrigger value="pyspark">
-                                                                Generated PYS Park
+                                                                Generated Pyspark
                                                             </TabsTrigger>
                                                         </TabsList>
                                                     </div>
