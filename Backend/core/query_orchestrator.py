@@ -35,6 +35,48 @@ class QueryOrchestrator:
     # =====================================================
     # FILE INGESTION
     # =====================================================
+    def start_attach_file(
+        self,
+        file_id: str,
+        file_path: str,
+        file_format: str,
+    ) -> str:
+        logger.info("Submitting async ingestion for file: %s", file_path)
+        return self.executor.submit_ingest_and_profile(
+            file_id=file_id,
+            file_path=file_path,
+            file_format=file_format
+        )
+
+    def finalize_attach_file(
+        self,
+        file_id: str,
+        file_path: str,
+        file_format: str,
+        context: str = None,
+        domain: str = None,
+        run_id: str = None
+    ):
+        logger.info("Finalizing ingestion for file: %s | run_id=%s", file_path, run_id)
+
+        if run_id:
+            ingestion = self.executor.finalize_ingest_and_profile(run_id)
+        else:
+            ingestion = self.executor.ingest_and_profile(
+                file_id=file_id,
+                file_path=file_path,
+                file_format=file_format
+            )
+
+        return self._complete_ingestion(
+            ingestion=ingestion,
+            file_id=file_id,
+            file_path=file_path,
+            file_format=file_format,
+            context=context,
+            domain=domain
+        )
+
     def attach_file(
         self,
         file_id: str,
@@ -53,6 +95,15 @@ class QueryOrchestrator:
             file_id=file_id,
             file_path=file_path,
             file_format=file_format
+        )
+
+        return self._complete_ingestion(
+            ingestion=ingestion,
+            file_id=file_id,
+            file_path=file_path,
+            file_format=file_format,
+            context=context,
+            domain=domain
         )
 
         if ingestion["status"] != "SUCCESS":
@@ -308,6 +359,61 @@ class QueryOrchestrator:
             "attempts": attempts_made,
             "context_debug": context_debug,
         }
+
+    def _complete_ingestion(
+        self,
+        ingestion: dict,
+        file_id: str,
+        file_path: str,
+        file_format: str,
+        context: str = None,
+        domain: str = None
+    ):
+        if ingestion["status"] != "SUCCESS":
+            raise RuntimeError("Ingestion failed")
+
+        schema = ingestion["schema"]
+        profiling = ingestion["profiling"]
+
+        if context:
+            schema["semantic_context"] = context
+        semantic_context = None
+        semantic_context_hash = None
+        selected_domain = domain or self._resolve_domain_from_context(context)
+        if context:
+            logger.info("Wiki root configured for targeted retrieval: %s", context)
+            schema["semantic_context_path"] = context
+        if selected_domain:
+            schema["business_context_domain"] = selected_domain
+
+        uploader = MetadataUploader()
+        uploader.upload(schema, file_id)
+
+        try:
+            ingestion_status = trigger_bedrock_ingestion(
+                bucket=settings.s3_bucket,
+                prefix="schema/"
+            )
+            logger.info("Bedrock ingestion trigger response: %s", ingestion_status)
+        except Exception as e:
+            logger.warning(
+                "Bedrock ingestion failed but profiling succeeded: %s", str(e)
+            )
+
+        logger.info("Schema uploaded to S3 and ingestion process handled")
+
+        self.active_file = {
+            "file_id": file_id,
+            "file_path": file_path,
+            "format": file_format,
+            "columns": schema["columns"],
+            "semantic_context": semantic_context,
+            "semantic_context_path": context,
+            "semantic_context_hash": semantic_context_hash,
+            "business_context_domain": selected_domain
+        }
+
+        return profiling
 
     def _build_analysis_note(self, user_input: str, context: dict) -> str | None:
         lowered = user_input.lower()

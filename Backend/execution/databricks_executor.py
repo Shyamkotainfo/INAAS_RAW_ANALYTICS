@@ -3,6 +3,7 @@ import time
 import json
 import os
 import base64
+from typing import Any
 from config.settings import settings
 from pyspark_utils.code_validator import validate_pyspark_code
 from logger.logger import get_logger
@@ -30,7 +31,7 @@ class DatabricksExecutor:
     # =====================================================
     # INGEST + PROFILE
     # =====================================================
-    def ingest_and_profile(self, file_id: str, file_path: str, file_format: str):
+    def submit_ingest_and_profile(self, file_id: str, file_path: str, file_format: str) -> str:
         self._ensure_remote_script(
             settings.databricks_ingest_script,
             os.path.join(self._backend_root, "databricks_scripts", "databricks", "ingest_and_profile.py")
@@ -52,8 +53,10 @@ class DatabricksExecutor:
             }
         }
 
-        stdout = self._submit_and_get_logs(payload)
+        return self.submit_job(payload)
 
+    def finalize_ingest_and_profile(self, run_id: str):
+        stdout = self.get_job_logs(run_id)
         schema = self._extract_schema(stdout)
         profiling = self._extract_profiling(stdout)
 
@@ -62,6 +65,11 @@ class DatabricksExecutor:
             "schema": schema,
             "profiling": profiling
         }
+
+    def ingest_and_profile(self, file_id: str, file_path: str, file_format: str):
+        run_id = self.submit_ingest_and_profile(file_id, file_path, file_format)
+        self.wait_for_job_completion(run_id)
+        return self.finalize_ingest_and_profile(run_id)
 
     def read_volume_text(self, volume_path: str) -> str:
         normalized_path = volume_path.strip()
@@ -250,6 +258,12 @@ class DatabricksExecutor:
             resp.raise_for_status()
 
     def _submit_and_get_logs(self, payload):
+        run_id = self.submit_job(payload)
+        self.wait_for_job_completion(run_id)
+        return self.get_job_logs(run_id)
+
+    def submit_job(self, payload: dict[str, Any]) -> str:
+        submit_start = time.time()
 
         resp = requests.post(
             f"https://{settings.databricks_host}/api/2.1/jobs/runs/submit",
@@ -266,33 +280,79 @@ class DatabricksExecutor:
                 ) from exc
             raise
 
-        run_id = resp.json()["run_id"]
+        run_id = str(resp.json()["run_id"])
+        elapsed = time.time() - submit_start
+        print("Elapsed:", time.time() - submit_start)
+        logger.info("Databricks job submit complete | run_id=%s | elapsed=%.2fs", run_id, elapsed)
+        return run_id
+
+    def get_job_status(self, run_id: str) -> dict[str, Any]:
+        resp = requests.get(
+            f"https://{settings.databricks_host}/api/2.1/jobs/runs/get",
+            headers={"Authorization": f"Bearer {settings.databricks_token}"},
+            params={"run_id": run_id}
+        )
+        resp.raise_for_status()
+
+        status = resp.json()
+        state = status.get("state", {})
+        life_cycle_state = state.get("life_cycle_state", "UNKNOWN")
+        result_state = state.get("result_state")
+        state_message = state.get("state_message")
+
+        if life_cycle_state == "TERMINATED":
+            normalized_status = "SUCCESS" if result_state == "SUCCESS" else "FAILED"
+        elif life_cycle_state in {"INTERNAL_ERROR", "SKIPPED"}:
+            normalized_status = "FAILED"
+        else:
+            normalized_status = "RUNNING"
+
+        return {
+            "run_id": str(run_id),
+            "status": normalized_status,
+            "life_cycle_state": life_cycle_state,
+            "result_state": result_state,
+            "state_message": state_message,
+            "raw": status,
+        }
+
+    def wait_for_job_completion(self, run_id: str, poll_interval_seconds: int = 3) -> dict[str, Any]:
+        poll_start = time.time()
 
         while True:
-            status = requests.get(
-                f"https://{settings.databricks_host}/api/2.1/jobs/runs/get",
-                headers={"Authorization": f"Bearer {settings.databricks_token}"},
-                params={"run_id": run_id}
-            ).json()
+            status = self.get_job_status(run_id)
+            if status["status"] == "SUCCESS":
+                elapsed = time.time() - poll_start
+                print("Elapsed:", time.time() - poll_start)
+                logger.info("Databricks polling complete | run_id=%s | status=%s | elapsed=%.2fs", run_id, status["status"], elapsed)
+                return status
 
-            state = status["state"]["life_cycle_state"]
+            if status["status"] == "FAILED":
+                elapsed = time.time() - poll_start
+                print("Elapsed:", time.time() - poll_start)
+                logger.info("Databricks polling complete | run_id=%s | status=%s | elapsed=%.2fs", run_id, status["status"], elapsed)
+                message = status.get("state_message") or status.get("result_state") or status.get("life_cycle_state")
+                raise RuntimeError(f"Databricks job failed: {message}")
 
-            if state == "TERMINATED":
-                break
+            time.sleep(poll_interval_seconds)
 
-            if state in {"INTERNAL_ERROR", "SKIPPED"}:
-                raise RuntimeError(f"Databricks job failed: {state}")
+    def get_job_logs(self, run_id: str) -> str:
+        logs_start = time.time()
 
-            time.sleep(3)
-
-        output = requests.get(
+        output_resp = requests.get(
             f"https://{settings.databricks_host}/api/2.1/jobs/runs/get-output",
             headers={"Authorization": f"Bearer {settings.databricks_token}"},
             params={"run_id": run_id}
-        ).json()
+        )
+        output_resp.raise_for_status()
+        output = output_resp.json()
 
         stdout = output.get("logs", "")
         stderr = output.get("error", "")
+
+        elapsed = time.time() - logs_start
+        print("Elapsed:", time.time() - logs_start)
+        logger.info("Databricks log fetch complete | run_id=%s | elapsed=%.2fs", run_id, elapsed)
 
         print("\n========== RAW DATABRICKS STDOUT ==========\n")
         print(stdout)

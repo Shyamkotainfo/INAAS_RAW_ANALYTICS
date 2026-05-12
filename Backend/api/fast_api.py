@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Any, Optional
 from analytics.dataset_overview_generator import DatasetOverviewGenerator
 from config.settings import settings
 from core.query_orchestrator import QueryOrchestrator
@@ -32,6 +32,7 @@ overview_generator = DatasetOverviewGenerator()
 VOLUME_BASE = settings.databricks_volume_base
 upload_orchestrator = QueryOrchestrator()
 dataset_sessions: dict[str, QueryOrchestrator] = {}
+profiling_jobs: dict[str, dict[str, Any]] = {}
 
 
 class StartProfilingRequest(BaseModel):
@@ -114,35 +115,105 @@ def start_profiling(request: StartProfilingRequest):
                 )
             )
 
-        semantic_context = None
         selected_domain = None
         if selected_context != "none":
             selected_domain = selected_context
-            semantic_context = settings.DOMAIN_WIKI_ROOTS.get(selected_domain)
 
         session_orchestrator = QueryOrchestrator()
-        profiling = session_orchestrator.attach_file(
+        run_id = session_orchestrator.start_attach_file(
             file_id=request.dataset_id,
             file_path=request.file_path,
             file_format=request.file_format,
-            context=request.semantic_context,
-            domain=selected_domain
         )
-        dataset_sessions[request.dataset_id] = session_orchestrator
-
-        overview = overview_generator.generate(profiling)
+        profiling_jobs[run_id] = {
+            "dataset_id": request.dataset_id,
+            "file_path": request.file_path,
+            "file_format": request.file_format,
+            "semantic_context": request.semantic_context,
+            "business_context": selected_context,
+            "selected_domain": selected_domain,
+            "orchestrator": session_orchestrator,
+        }
 
         return {
             "success": True,
+            "job_id": run_id,
+            "run_id": run_id,
+            "status": "RUNNING",
             "dataset_id": request.dataset_id,
             "business_context": selected_context,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Profiling failed")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/profiling-status/{job_id}")
+def profiling_status(job_id: str):
+    try:
+        job = profiling_jobs.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Profiling job not found.")
+
+        session_orchestrator = job["orchestrator"]
+        status = session_orchestrator.executor.get_job_status(job_id)
+
+        if status["status"] == "RUNNING":
+            return {
+                "success": True,
+                "job_id": job_id,
+                "dataset_id": job["dataset_id"],
+                "status": "RUNNING",
+                "life_cycle_state": status.get("life_cycle_state"),
+                "state_message": status.get("state_message"),
+            }
+
+        if status["status"] == "FAILED":
+            failure_detail = status.get("state_message") or status.get("result_state") or "Profiling failed"
+            try:
+                session_orchestrator.executor.get_job_logs(job_id)
+            except Exception as exc:
+                failure_detail = str(exc)
+
+            profiling_jobs.pop(job_id, None)
+            return {
+                "success": False,
+                "job_id": job_id,
+                "dataset_id": job["dataset_id"],
+                "status": "FAILED",
+                "life_cycle_state": status.get("life_cycle_state"),
+                "result_state": status.get("result_state"),
+                "state_message": status.get("state_message"),
+                "error": failure_detail,
+            }
+
+        profiling = session_orchestrator.finalize_attach_file(
+            file_id=job["dataset_id"],
+            file_path=job["file_path"],
+            file_format=job["file_format"],
+            context=job.get("semantic_context"),
+            domain=job.get("selected_domain"),
+            run_id=job_id
+        )
+        dataset_sessions[job["dataset_id"]] = session_orchestrator
+        overview = overview_generator.generate(profiling)
+
+        profiling_jobs.pop(job_id, None)
+        return {
+            "success": True,
+            "job_id": job_id,
+            "dataset_id": job["dataset_id"],
+            "business_context": job.get("business_context"),
+            "status": "SUCCESS",
             "overview": overview,
             "profiling": profiling
         }
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception("Profiling failed")
+        logger.exception("Profiling status check failed")
         raise HTTPException(status_code=500, detail=str(exc))
 
 
