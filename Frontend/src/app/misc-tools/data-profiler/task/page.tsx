@@ -183,7 +183,12 @@ export default function ExplorationTaskDetail() {
     );
   }
 
-  const { profiling } = data;
+  const profiling = {
+    ...data.profiling,
+    columns: Array.isArray(data.profiling?.columns)
+      ? data.profiling.columns
+      : [],
+  };
 
   const totalNulls = profiling.columns.reduce(
     (sum, col) => sum + col.null_count,

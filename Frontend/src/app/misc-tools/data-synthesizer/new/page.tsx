@@ -137,6 +137,9 @@ export default function DataSynthesizer() {
     const size = file.size < 1024 ? `${file.size} B` : file.size < 1048576 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / 1048576).toFixed(1)} MB`;
     setSchemaFile({ name: file.name, size });
     const res = await apiService.postSchemaUpload(file);
+    const schemaColumns = Array.isArray(res?.columns)
+      ? res.columns
+      : [];
 
     toast({ title: "Schema file uploaded", description: `${file.name} loaded. Fields will be auto-populated.` });
     // Mock: add sample fields from schema
@@ -146,7 +149,18 @@ export default function DataSynthesizer() {
     //   { ...defaultField(), name: "status", type: "enum", enumValues: "active, inactive, pending" },
     //   { ...defaultField(), name: "amount", type: "float", distribution: "normal" },
     // ]);
-      const mappedFields: SynthField[] = res.columns.map((col: any) => ({
+    if (!schemaColumns.length) {
+      toast({
+        variant: "destructive",
+        title: "Schema upload failed",
+        description:
+          "No columns were returned. You can add fields manually.",
+      });
+      setFields([defaultField()]);
+      return;
+    }
+
+      const mappedFields: SynthField[] = schemaColumns.map((col: any) => ({
       id: crypto.randomUUID(),
       name: col.name,
       type: (col.type || "string") as FieldType,

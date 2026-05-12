@@ -918,11 +918,27 @@ class ApiService {
 
     return await response.json();
   }
-  async pollProfilingStatus(jobId: string, intervalMs: number = 4000) {
+  async pollProfilingStatus(
+    jobId: string,
+    intervalMs: number = 4000,
+    maxWaitMs: number = 15 * 60 * 1000,
+  ) {
+    const startedAt = Date.now();
+
     while (true) {
       const data = await this.getProfilingStatus(jobId);
 
-      if (data?.status === "RUNNING") {
+      if (data?.status === "RUNNING" || data?.status === "FINALIZING") {
+        if (Date.now() - startedAt > maxWaitMs) {
+          return {
+            success: false,
+            job_id: jobId,
+            status: "FAILED",
+            error:
+              "Profiling timed out while waiting for completion. Please retry or check job status again.",
+          };
+        }
+
         await new Promise((resolve) => setTimeout(resolve, intervalMs));
         continue;
       }
@@ -1028,15 +1044,25 @@ class ApiService {
 
 
       const data = await response.json();
+      const rawColumns =
+        data?.columns ??
+        data?.data?.columns ??
+        data?.fields ??
+        data?.data?.fields;
+      const columns = Array.isArray(rawColumns)
+        ? rawColumns
+        : [];
 
-      // 
-
-      return data; // should match ProfilingResponse
+      return {
+        ...data,
+        columns,
+      };
     } catch (error) {
       console.error("Profiling API Error:", error);
       return {
         success: false,
         error: "Failed to fetch profiling data",
+        columns: [],
       };
     }
   }
