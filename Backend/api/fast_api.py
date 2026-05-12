@@ -199,6 +199,7 @@ def profiling_status(job_id: str):
         )
         dataset_sessions[job["dataset_id"]] = session_orchestrator
         overview = overview_generator.generate(profiling)
+        logger.info("Profiling completed | job_id=%s | dataset_id=%s", job_id, job["dataset_id"])
 
         profiling_jobs.pop(job_id, None)
         return {

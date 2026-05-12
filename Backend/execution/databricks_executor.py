@@ -307,6 +307,14 @@ class DatabricksExecutor:
         else:
             normalized_status = "RUNNING"
 
+        logger.info(
+            "Checking run status | run_id=%s | life_cycle_state=%s | result_state=%s | normalized_status=%s",
+            run_id,
+            life_cycle_state,
+            result_state,
+            normalized_status,
+        )
+
         return {
             "run_id": str(run_id),
             "status": normalized_status,
