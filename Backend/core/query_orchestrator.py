@@ -18,6 +18,7 @@ from query_generation.pyspark_generator import (
     resolve_columns,
 )
 from summarization.result_summarizer import ResultSummarizer
+from llm.llm_query import LLMInvocationError
 
 logger = get_logger(__name__)
 
@@ -266,6 +267,15 @@ class QueryOrchestrator:
                 "text_results": None,
                 "context_debug": context_debug,
             }
+        except Exception as exc:
+            logger.exception("PySpark generation failed | phase=PYSPARK_GENERATION")
+            return self._build_error_response(
+                user_input=user_input,
+                context_debug=context_debug,
+                analysis_note=analysis_note,
+                phase="PYSPARK_GENERATION",
+                exc=exc,
+            )
 
         # --------------------------------------------------
         # Step 2 — Execute with up to MAX_RETRIES correction attempts
@@ -289,11 +299,25 @@ class QueryOrchestrator:
                 with ThreadPoolExecutor(max_workers=2) as tpool:
                     future_summary = tpool.submit(self.summarizer.summarize, user_input, result, "query")
                     future_explain = tpool.submit(self.summarizer.explain, user_input, result)
-                    
-                    summary = future_summary.result()
-                    text_results = future_explain.result()
 
-                return {
+                    summary = None
+                    text_results = None
+                    insights_error = None
+                    explanation_error = None
+
+                    try:
+                        summary = future_summary.result()
+                    except Exception as exc:
+                        logger.exception("Reasoning insight generation failed")
+                        insights_error = self._format_exception_message(exc)
+
+                    try:
+                        text_results = future_explain.result()
+                    except Exception as exc:
+                        logger.exception("Result explanation generation failed")
+                        explanation_error = self._format_exception_message(exc)
+
+                response = {
                     "user_input": user_input,
                     "pyspark": last_code,
                     "results": result,
@@ -304,6 +328,13 @@ class QueryOrchestrator:
                     "attempts": attempts_made,
                     "context_debug": context_debug,
                 }
+                if insights_error:
+                    response["insights_error"] = insights_error
+                if explanation_error:
+                    response["text_results_error"] = explanation_error
+                if insights_error or explanation_error:
+                    response["warning"] = "Result generation completed, but one or more LLM explanation steps failed."
+                return response
 
             # FAILED — capture error and try to correct
             last_error = execution.get("error", "Unknown execution error")
@@ -349,6 +380,7 @@ class QueryOrchestrator:
         return {
             "user_input": user_input,
             "error": last_error,
+            "reason": last_error,
             "query": last_code,
             "pyspark": last_code,
             "results": None,
@@ -357,6 +389,37 @@ class QueryOrchestrator:
             "analysis_note": analysis_note,
             "attempts": MAX_RETRIES,
             "attempts": attempts_made,
+            "context_debug": context_debug,
+        }
+
+    def _format_exception_message(self, exc: Exception) -> str:
+        if isinstance(exc, LLMInvocationError):
+            return f"{exc.error_type}: {str(exc)}"
+        return f"{type(exc).__name__}: {str(exc)}"
+
+    def _build_error_response(
+        self,
+        *,
+        user_input: str,
+        context_debug: dict[str, Any],
+        analysis_note: str | None,
+        phase: str,
+        exc: Exception,
+    ) -> dict[str, Any]:
+        error_message = self._format_exception_message(exc)
+        return {
+            "user_input": user_input,
+            "error": error_message,
+            "reason": error_message,
+            "error_type": getattr(exc, "error_type", type(exc).__name__),
+            "phase": phase,
+            "query": None,
+            "pyspark": None,
+            "results": None,
+            "insights": None,
+            "text_results": None,
+            "analysis_note": analysis_note,
+            "attempts": 0,
             "context_debug": context_debug,
         }
 

@@ -1,6 +1,9 @@
 # core/summarizer/result_summarizer.py
 
 from llm.llm_query import invoke_llm
+from logger.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class ResultSummarizer:
@@ -61,11 +64,13 @@ class ResultSummarizer:
             {data_text}
             """
 
-        return invoke_llm(
+        reasoning = invoke_llm(
             prompt=prompt,
             temperature=0.2,
             max_tokens=400
         )
+        logger.info("Generated reasoning insights | chars=%d | raw=%s", len(reasoning), reasoning)
+        return reasoning
 
     # -----------------------------------------------------
     # TEXTUAL EXPLANATION (Paragraph format)
@@ -104,11 +109,13 @@ class ResultSummarizer:
             {data_text}
             """
 
-        return invoke_llm(
+        explanation = invoke_llm(
             prompt=prompt,
             temperature=0.2,
             max_tokens=400
         )
+        logger.info("Generated plain-text explanation | chars=%d | raw=%s", len(explanation), explanation)
+        return explanation
 
     # -----------------------------------------------------
     # PROFILING MODE SUMMARY
@@ -138,8 +145,10 @@ class ResultSummarizer:
             {profiling_result}
             """
 
-        return invoke_llm(
+        profiling_summary = invoke_llm(
             prompt=prompt,
             temperature=0.2,
             max_tokens=450
         )
+        logger.info("Generated profiling insights | chars=%d | raw=%s", len(profiling_summary), profiling_summary)
+        return profiling_summary

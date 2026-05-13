@@ -206,12 +206,13 @@ final_df = df.limit(1).select(
         )
         logger.info("Sending PySpark generation prompt to LLM (tokens=%d)", max_tokens)
 
-        raw = self.llm.generate(prompt, max_tokens=max_tokens).strip()
+        try:
+            raw = self.llm.generate(prompt, max_tokens=max_tokens).strip()
+        except Exception:
+            logger.exception("PySpark LLM generation failed before sanitization")
+            raise
         logger.info("Received PySpark code from LLM")
-
-        print("\n========== GENERATED PYSPARK ==========\n")
-        print(raw)
-        print("\n=======================================\n")
+        logger.info("Raw generated PySpark | chars=%d | raw=%s", len(raw), raw)
 
         code = self._sanitize(raw)
         try:
@@ -262,12 +263,13 @@ final_df = df.limit(1).select(
             )
         )
         logger.info("Sending PySpark correction prompt to LLM (attempt)")
-        raw = self.llm.generate(prompt, max_tokens=max_tokens).strip()
+        try:
+            raw = self.llm.generate(prompt, max_tokens=max_tokens).strip()
+        except Exception:
+            logger.exception("PySpark correction LLM generation failed before sanitization")
+            raise
         logger.info("Received corrected PySpark code from LLM")
-
-        print("\n========== CORRECTED PYSPARK ==========\n")
-        print(raw)
-        print("\n=======================================\n")
+        logger.info("Raw corrected PySpark | chars=%d | raw=%s", len(raw), raw)
 
         code = self._sanitize(raw)
         self._validate(code, context)
@@ -326,11 +328,12 @@ final_df = df.limit(1).select(
             _build_prompt_log_summary(prompt, resolved_mappings, business_rule)
         )
         logger.info("Repairing initial PySpark generation after validation failure")
-        raw = self.llm.generate(prompt, max_tokens=max_tokens).strip()
-
-        print("\n========== REPAIRED INITIAL PYSPARK ==========\n")
-        print(raw)
-        print("\n==============================================\n")
+        try:
+            raw = self.llm.generate(prompt, max_tokens=max_tokens).strip()
+        except Exception:
+            logger.exception("PySpark repair LLM generation failed before sanitization")
+            raise
+        logger.info("Raw repaired PySpark | chars=%d | raw=%s", len(raw), raw)
 
         repaired_code = self._sanitize(raw)
         self._validate(repaired_code)

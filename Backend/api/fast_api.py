@@ -485,4 +485,12 @@ def run_query(request: QueryRequest):
         raise
     except Exception as exc:
         logger.exception("Query failed with unexpected error")
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": True,
+                "reason": str(exc),
+                "message": "Query failed with unexpected error",
+                "error_type": type(exc).__name__,
+            },
+        )
